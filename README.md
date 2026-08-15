@@ -40,8 +40,14 @@ Copilot discovers the skill from
 GitHub CLI:
 
 ```shell
-gh skill install ninghu/agent-insights-quickstart agent-insights-onboarding
+gh skill install ninghu/agent-insights-quickstart \
+  agent-insights-onboarding@v0.1.1 \
+  --allow-hidden-dirs
 ```
+
+The explicit hidden-directory flag tells GitHub CLI to include the standard
+`.agents/skills` project location. Preview the skill before installation with
+`gh skill preview` and the same flag.
 
 ## Onboarding paths
 
