@@ -174,3 +174,15 @@ def test_skill_asks_project_choice_before_azure_details(repo_root) -> None:
     )
     assert "Insights generated: <insight_count>" in skill
     assert "Review details: <agent_insights_portal_url>" in skill
+
+
+def test_readme_has_one_clone_and_ask_entry_path(repo_root) -> None:
+    readme = (repo_root / "README.md").read_text(encoding="utf-8")
+
+    assert "git clone https://github.com/ninghu/agent-insights-quickstart" in readme
+    assert "Set up Agent Insights for me." in readme
+    assert "no\nseparate skill installation is required" in readme
+    assert "gh skill install" not in readme
+    assert readme.index("Set up Agent Insights for me.") < readme.index(
+        "## Onboarding paths"
+    )

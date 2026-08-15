@@ -11,16 +11,15 @@ the complete path from permissions and telemetry to a visible first insight.
 
 ## Quick start
 
-First, clone (enlist) the repository:
+Clone the repository:
 
 ```shell
 git clone https://github.com/ninghu/agent-insights-quickstart
 cd agent-insights-quickstart
 ```
 
-Then open that folder in your preferred coding agent, such as **GitHub Copilot**,
-**Claude Code**, **Codex**, or any other
-[Agent Skills](https://agentskills.io)-compatible agent. Then ask:
+Open the folder in **GitHub Copilot**, **Claude Code**, **Codex**, or another
+[Agent Skills](https://agentskills.io)-compatible agent, then ask:
 
 ```text
 Set up Agent Insights for me.
@@ -36,21 +35,6 @@ Foundry project**. No subscription or endpoint is requested before that choice.
 
 You still need an Agent Insights-enabled Azure subscription and permission to manage
 the selected resources. The workflow reports any missing access before mutation.
-
-### Use it without cloning this repository
-
-Install the self-contained skill into an existing project, selecting your agent host:
-
-```shell
-gh skill install ninghu/agent-insights-quickstart \
-  agent-insights-onboarding@v0.1.7 \
-  --allow-hidden-dirs \
-  --agent AGENT_NAME
-```
-
-Use `github-copilot`, `claude-code`, or `codex` as `AGENT_NAME`. Reopen your agent in
-that project and use the same prompt. Cloning remains the simplest and most portable
-path.
 
 ## Onboarding paths
 
@@ -85,18 +69,6 @@ enabling scheduling.
 See the skill's [permission reference](.agents/skills/agent-insights-onboarding/references/permissions.md)
 for the complete policy and prerequisites.
 
-## Standalone CLI
-
-The skill drives the CLI automatically, but every phase is available directly:
-
-```shell
-python .agents/skills/agent-insights-onboarding/scripts/agent_insights_onboard.py --help
-```
-
-The CLI writes sanitized, ignored receipts under `.agent-insights/runs/`. Receipts
-contain resource and operation IDs, never tokens, keys, connection strings, headers, or
-raw customer telemetry.
-
 ## Safety and cost
 
 - Review Azure Monitor, Foundry model, and Hosted Agent pricing before using scratch
@@ -108,7 +80,20 @@ raw customer telemetry.
   deleted or overwritten.
 - Cleanup operates only on resources whose receipt and ownership tags match.
 
-## Development
+<details>
+<summary>Advanced: standalone CLI and development</summary>
+
+The skill drives the CLI automatically. To inspect its commands:
+
+```shell
+python .agents/skills/agent-insights-onboarding/scripts/agent_insights_onboard.py --help
+```
+
+The CLI writes sanitized, ignored receipts under `.agent-insights/runs/`. Receipts
+contain resource and operation IDs, never tokens, keys, connection strings, headers, or
+raw customer telemetry.
+
+For development:
 
 ```shell
 python -m pip install --require-hashes -r requirements-dev.lock
@@ -120,6 +105,8 @@ mypy .agents/skills/agent-insights-onboarding/scripts
 
 Live tests require a disposable Agent Insights-enabled subscription and are never run
 by pull-request CI.
+
+</details>
 
 ## License
 
