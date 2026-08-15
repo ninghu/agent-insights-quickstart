@@ -5,12 +5,13 @@ from __future__ import annotations
 import re
 from collections.abc import Mapping, Sequence
 from typing import Any
-from urllib.parse import quote
+from urllib.parse import quote, unquote, urlparse
 
 from .azure_cli import AzureCli
 from .errors import OnboardingError
 from .models import AzureContext
 from .resource_ids import parse_resource_id, require_resource_type
+from .validation import validate_project_endpoint
 
 _MINIMUM_AZURE_CLI = (2, 80, 0)
 _PROJECT_API_VERSION = "2025-06-01"
@@ -138,6 +139,88 @@ def list_projects(cli: AzureCli, subscription_id: str) -> list[dict[str, Any]]:
         for item in value
         if isinstance(item, Mapping) and item.get("id")
     ]
+
+
+def find_project_by_endpoint(cli: AzureCli, project_endpoint: str) -> dict[str, str]:
+    endpoint = validate_project_endpoint(project_endpoint)
+    parsed_endpoint = urlparse(endpoint)
+    account_name = (parsed_endpoint.hostname or "").removesuffix(
+        ".services.ai.azure.com"
+    )
+    project_name = unquote(parsed_endpoint.path.rstrip("/").split("/")[-1])
+    account = cli.account_show()
+    tenant_id = str(account.get("tenantId") or "")
+    subscriptions = [
+        item
+        for item in list_subscriptions(cli)
+        if item["state"].casefold() == "enabled"
+        and item["tenant_id"].casefold() == tenant_id.casefold()
+    ]
+    if not subscriptions:
+        raise OnboardingError(
+            "no_active_tenant_subscriptions",
+            "Azure CLI has no enabled subscriptions in the active tenant.",
+        )
+    escaped_name = f"{account_name}/{project_name}".replace("'", "''")
+    response = cli.rest(
+        method="post",
+        url=(
+            "https://management.azure.com/providers/Microsoft.ResourceGraph/resources"
+            "?api-version=2022-10-01"
+        ),
+        body={
+            "subscriptions": [item["id"] for item in subscriptions],
+            "query": (
+                "Resources "
+                "| where type =~ 'microsoft.cognitiveservices/accounts/projects' "
+                f"| where name =~ '{escaped_name}' "
+                "| project id, name, location, subscriptionId"
+            ),
+            "options": {"resultFormat": "objectArray"},
+        },
+    )
+    data = response.get("data") if isinstance(response, Mapping) else None
+    if not isinstance(data, list):
+        raise OnboardingError(
+            "invalid_resource_graph_response",
+            "Azure Resource Graph returned an invalid project result.",
+        )
+    matches = [item for item in data if isinstance(item, Mapping)]
+    if not matches:
+        raise OnboardingError(
+            "project_not_found_in_active_tenant",
+            "No Foundry project matching the endpoint was found in the active tenant.",
+            {
+                "active_tenant_id": tenant_id,
+                "searched_subscription_count": len(subscriptions),
+            },
+        )
+    if len(matches) != 1:
+        raise OnboardingError(
+            "ambiguous_project_endpoint",
+            "Multiple ARM projects matched the Foundry project endpoint.",
+            {"project_ids": [str(item.get("id") or "") for item in matches]},
+        )
+    match = matches[0]
+    resource_id = require_resource_type(
+        str(match.get("id") or ""),
+        "Microsoft.CognitiveServices/accounts/projects",
+    )
+    validate_project_endpoint(endpoint, resource_id.name, resource_id.names[0])
+    subscription_id = str(match.get("subscriptionId") or resource_id.subscription_id)
+    if subscription_id.casefold() != resource_id.subscription_id.casefold():
+        raise OnboardingError(
+            "resource_graph_subscription_mismatch",
+            "Azure Resource Graph returned conflicting subscription identifiers.",
+        )
+    return {
+        "project_resource_id": resource_id.raw,
+        "project_endpoint": endpoint,
+        "subscription_id": resource_id.subscription_id,
+        "location": str(match.get("location") or ""),
+        "account_name": resource_id.names[0],
+        "project_name": resource_id.name,
+    }
 
 
 def get_project(cli: AzureCli, project_resource_id: str) -> Mapping[str, Any]:

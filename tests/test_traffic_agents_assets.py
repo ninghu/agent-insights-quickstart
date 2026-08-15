@@ -138,3 +138,22 @@ def test_static_manifests_requirements_and_fixtures_are_consistent(assets_root) 
         )
         assert len(healthy) == 6
         assert len(faulty) == 5
+
+
+def test_skill_asks_project_choice_before_azure_details(repo_root) -> None:
+    skill = (
+        repo_root
+        / ".agents"
+        / "skills"
+        / "agent-insights-onboarding"
+        / "SKILL.md"
+    ).read_text(encoding="utf-8")
+    question = (
+        "Would you like to use an existing Foundry project or create a new\n"
+        "   one?"
+    )
+
+    assert question in skill
+    question_index = skill.index(question)
+    assert question_index < skill.index("project endpoint first")
+    assert question_index < skill.index("enabled subscriptions")

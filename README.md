@@ -31,6 +31,9 @@ separate skill installation is required. Your agent checks Python and Azure CLI,
 guides Azure sign-in, discovers available resources, and runs the read-only doctor
 before making changes.
 
+The first question is whether to **use an existing Foundry project** or **create a new
+Foundry project**. No subscription or endpoint is requested before that choice.
+
 You still need an Agent Insights-enabled Azure subscription and permission to manage
 the selected resources. The workflow reports any missing access before mutation.
 
@@ -40,7 +43,7 @@ Install the self-contained skill into an existing project, selecting your agent 
 
 ```shell
 gh skill install ninghu/agent-insights-quickstart \
-  agent-insights-onboarding@v0.1.2 \
+  agent-insights-onboarding@v0.1.3 \
   --allow-hidden-dirs \
   --agent AGENT_NAME
 ```
@@ -54,7 +57,7 @@ path.
 | Path | Result |
 | --- | --- |
 | Existing Foundry project | Discovers the project, agent, model, and Application Insights connection; repairs missing scoped access; preserves existing monitor settings; validates an Agent Insights result. |
-| New scratch environment | Creates a tagged Foundry project and monitoring stack, deploys either a Prompt Agent or source-code Hosted Agent, sends bounded sample traffic, enables Agent Insights, and verifies a first insight. |
+| Create a new Foundry project | Creates a tagged scratch project and monitoring stack, deploys either a Prompt Agent or source-code Hosted Agent, sends bounded sample traffic, enables Agent Insights, and verifies a first insight. |
 
 The scratch environment stays available after success. The final receipt identifies
 cost-bearing resources and prints an ownership-checked cleanup command.

@@ -5,15 +5,17 @@ state.
 
 ## Required selections
 
-- Azure subscription
-- Foundry project
+- Foundry project endpoint
 - Existing agent
 - Analysis model deployment
 - Application Insights component only when the project has no usable connection
 
-Discover each value through Azure and Foundry APIs. Reject malformed resource IDs,
-cross-subscription mismatches, non-HTTPS project endpoints, multiple ambiguous
-Application Insights connections, and unavailable agents or models.
+Resolve the endpoint to its subscription and ARM project through Azure Resource Graph
+across enabled subscriptions in the active tenant. Ask for a subscription only if this
+lookup cannot resolve one project. Discover remaining values through Azure and Foundry
+APIs. Reject malformed resource IDs, cross-subscription mismatches, non-HTTPS project
+endpoints, multiple ambiguous Application Insights connections, and unavailable agents
+or models.
 
 ## Mutation rules
 

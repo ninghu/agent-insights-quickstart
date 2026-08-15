@@ -27,30 +27,39 @@ reference for the selected path:
 
 ## Guided workflow
 
-1. Ask the user to choose **Existing Foundry project** or **New scratch environment**.
-2. For scratch, ask the user to choose **Prompt Agent** or **Code-based Hosted Agent**.
-3. Check for Python 3.13+, Azure CLI 2.80+, and Git. If a tool is missing, ask before
+1. Ask this first question before requesting an endpoint, subscription, or any other
+   Azure value: **Would you like to use an existing Foundry project or create a new
+   one?** Offer exactly these choices:
+   - **Use an existing Foundry project (Recommended)**
+   - **Create a new Foundry project**
+2. Check for Python 3.13+, Azure CLI 2.80+, and Git. If a tool is missing, ask before
    installing it and use only the vendor's documented installer.
-4. Treat the directory containing this `SKILL.md` as `<skill-root>`. Create an ignored
+3. Treat the directory containing this `SKILL.md` as `<skill-root>`. Create an ignored
    `.venv` with Python 3.13 when needed and install the reviewed
    `<skill-root>/scripts/requirements.txt` with `python -m pip`. Use that environment's
    Python for every command below. Do not install into the system interpreter.
-5. Require an interactive Azure CLI user session. If necessary, run `az login`, then
-   show the available subscriptions and ask the user to select one. Do not use a fixed
-   tenant or subscription.
-6. Gather only the choices needed by the selected path. Prefer CLI discovery over
+4. Require an interactive Azure CLI user session. If necessary, run `az login`. Do not
+   use a fixed tenant or subscription.
+5. For an existing project, ask for its Foundry project endpoint first. Run
+   `discover project --project-endpoint <endpoint>` to resolve its subscription and ARM
+   resource ID across enabled subscriptions in the active tenant. Ask for a subscription
+   only if the endpoint cannot be resolved or is ambiguous.
+6. When creating a new project, ask the user to choose **Prompt Agent** or
+   **Code-based Hosted Agent**, then show enabled subscriptions and ask them to select
+   one.
+7. Gather only the choices needed by the selected path. Prefer CLI discovery over
    asking the user to paste resource IDs.
-7. From the user's current repository root, run the read-only doctor first:
+8. From the user's current repository root, run the read-only doctor first:
 
    ```text
    python "<skill-root>/scripts/agent_insights_onboard.py" doctor <arguments>
    ```
 
-8. Show the doctor's non-secret context and exact missing prerequisites. Stop before
+9. Show the doctor's non-secret context and exact missing prerequisites. Stop before
    mutation if the subscription is not Agent Insights-enabled, the cloud is not
    `AzureCloud`, permissions are insufficient, the model lacks quota, or resources are
    ambiguous.
-9. When doctor returns `ready`, run:
+10. When doctor returns `ready`, run:
 
    ```text
    python "<skill-root>/scripts/agent_insights_onboard.py" onboard <same arguments>
@@ -58,9 +67,9 @@ reference for the selected path:
 
    The CLI freezes and prints a plan, then automatically applies it. Do not insert a
    second approval prompt for the planned RBAC writes.
-10. Report progress from the CLI's JSON events without exposing subprocess output that
+11. Report progress from the CLI's JSON events without exposing subprocess output that
    the CLI redacted.
-11. Require a final receipt with `status: complete`. Give the user the Foundry portal
+12. Require a final receipt with `status: complete`. Give the user the Foundry portal
     link, agent/version, monitor/run/insight IDs, cost estimate when returned by the
     service, receipt path, and cleanup command.
 

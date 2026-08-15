@@ -7,8 +7,10 @@ import os
 import re
 import shutil
 import subprocess
+import tempfile
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from .errors import OnboardingError
@@ -150,21 +152,34 @@ class AzureCli:
         allow_failure: bool = False,
     ) -> Any:
         arguments = ["rest", "--method", method, "--url", url]
+        body_path: Path | None = None
         if body is not None:
+            descriptor, temporary_name = tempfile.mkstemp(
+                prefix="agent-insights-rest-",
+                suffix=".json",
+                text=True,
+            )
+            body_path = Path(temporary_name)
+            with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as stream:
+                json.dump(body, stream, separators=(",", ":"))
             arguments.extend(
                 (
                     "--headers",
                     "Content-Type=application/json",
                     "--body",
-                    json.dumps(body, separators=(",", ":")),
+                    f"@{body_path}",
                 )
             )
-        return self.json(
-            arguments,
-            timeout=timeout,
-            allow_failure=allow_failure,
-            allow_empty=method.casefold() == "delete",
-        )
+        try:
+            return self.json(
+                arguments,
+                timeout=timeout,
+                allow_failure=allow_failure,
+                allow_empty=method.casefold() == "delete",
+            )
+        finally:
+            if body_path is not None:
+                body_path.unlink(missing_ok=True)
 
     @staticmethod
     def _safe_arguments(arguments: Sequence[str]) -> list[str]:

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 import subprocess
+from pathlib import Path
 
 import pytest
 from insights_onboarding import azure_cli as azure_cli_module
@@ -9,6 +11,7 @@ from insights_onboarding.discovery import (
     account_id_from_project,
     check_azure_cli_version,
     derive_project_endpoint,
+    find_project_by_endpoint,
     linked_workspace_id,
     list_app_insights_connections,
     model_is_available,
@@ -43,6 +46,77 @@ class StubCli:
         return self.rest_values.pop(0)
 
 
+class EndpointDiscoveryCli:
+    def __init__(self, *, project_rows: list[dict[str, object]]) -> None:
+        self.project_rows = project_rows
+        self.rest_body: dict[str, object] | None = None
+
+    def account_show(self):
+        return {"tenantId": "22222222-2222-2222-2222-222222222222"}
+
+    def json(self, arguments, **_kwargs):
+        assert list(arguments) == ["account", "list", "--all"]
+        return [
+            {
+                "id": "11111111-1111-1111-1111-111111111111",
+                "name": "Demo",
+                "tenantId": "22222222-2222-2222-2222-222222222222",
+                "state": "Enabled",
+                "isDefault": True,
+            },
+            {
+                "id": "99999999-9999-9999-9999-999999999999",
+                "name": "Other tenant",
+                "tenantId": "88888888-8888-8888-8888-888888888888",
+                "state": "Enabled",
+                "isDefault": False,
+            },
+        ]
+
+    def rest(self, *, method: str, url: str, body, **_kwargs):
+        assert method == "post"
+        assert "Microsoft.ResourceGraph/resources" in url
+        self.rest_body = body
+        return {"data": self.project_rows}
+
+
+def test_project_endpoint_resolves_subscription_through_resource_graph(
+    azure_ids: dict[str, str],
+) -> None:
+    cli = EndpointDiscoveryCli(
+        project_rows=[
+            {
+                "id": azure_ids["project"],
+                "name": "demo-account/demo-project",
+                "location": "westus3",
+                "subscriptionId": "11111111-1111-1111-1111-111111111111",
+            }
+        ]
+    )
+
+    result = find_project_by_endpoint(
+        cli,
+        "https://demo-account.services.ai.azure.com/api/projects/demo-project",
+    )
+
+    assert result["project_resource_id"] == azure_ids["project"]
+    assert result["subscription_id"] == "11111111-1111-1111-1111-111111111111"
+    assert result["account_name"] == "demo-account"
+    assert cli.rest_body is not None
+    assert cli.rest_body["subscriptions"] == [
+        "11111111-1111-1111-1111-111111111111"
+    ]
+
+
+def test_project_endpoint_reports_active_tenant_miss() -> None:
+    with pytest.raises(OnboardingError) as excinfo:
+        find_project_by_endpoint(
+            EndpointDiscoveryCli(project_rows=[]),
+            "https://demo-account.services.ai.azure.com/api/projects/demo-project",
+        )
+    assert excinfo.value.code == "project_not_found_in_active_tenant"
+
+
 def test_azure_cli_json_successfully_parses_stdout() -> None:
     calls: list[tuple[list[str], float]] = []
 
@@ -72,6 +146,37 @@ def test_azure_cli_rest_accepts_empty_delete_response() -> None:
     )
 
     assert result is None
+
+
+def test_azure_cli_rest_uses_temporary_body_file() -> None:
+    observed_path: Path | None = None
+
+    def executor(command, _timeout):
+        nonlocal observed_path
+        body_argument = command[command.index("--body") + 1]
+        assert body_argument.startswith("@")
+        observed_path = Path(body_argument[1:])
+        assert json.loads(observed_path.read_text(encoding="utf-8")) == {
+            "subscriptions": ["sub-1", "sub-2"],
+            "query": "Resources | take 1",
+        }
+        return CommandOutput(0, '{"data": []}', "")
+
+    result = AzureCli(executor=executor).rest(
+        method="post",
+        url=(
+            "https://management.azure.com/providers/Microsoft.ResourceGraph/resources"
+            "?api-version=2022-10-01"
+        ),
+        body={
+            "subscriptions": ["sub-1", "sub-2"],
+            "query": "Resources | take 1",
+        },
+    )
+
+    assert result == {"data": []}
+    assert observed_path is not None
+    assert not observed_path.exists()
 
 
 def test_azure_cli_failure_redacts_stderr_and_sensitive_arguments() -> None:

@@ -11,7 +11,12 @@ from azure.core.exceptions import HttpResponseError, ServiceRequestError, Servic
 
 from .agents import project_client
 from .azure_cli import AzureCli
-from .discovery import list_projects, list_subscriptions, select_context
+from .discovery import (
+    find_project_by_endpoint,
+    list_projects,
+    list_subscriptions,
+    select_context,
+)
 from .errors import OnboardingError
 from .models import OnboardingConfig
 from .orchestrator import cleanup, doctor, onboard, status
@@ -148,6 +153,19 @@ def _discover(args: argparse.Namespace) -> int:
     if args.kind == "subscriptions":
         _emit({"status": "complete", "subscriptions": list_subscriptions(cli)})
         return 0
+    if args.kind == "project":
+        if not args.project_endpoint:
+            raise OnboardingError(
+                "missing_project_endpoint",
+                "Project discovery requires --project-endpoint.",
+            )
+        _emit(
+            {
+                "status": "complete",
+                "project": find_project_by_endpoint(cli, args.project_endpoint),
+            }
+        )
+        return 0
     if not args.subscription_id:
         raise OnboardingError(
             "missing_subscription",
@@ -209,7 +227,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     discover_parser.add_argument(
         "kind",
-        choices=("subscriptions", "projects", "agents"),
+        choices=("subscriptions", "project", "projects", "agents"),
     )
     discover_parser.add_argument("--subscription-id")
     discover_parser.add_argument("--project-endpoint")
