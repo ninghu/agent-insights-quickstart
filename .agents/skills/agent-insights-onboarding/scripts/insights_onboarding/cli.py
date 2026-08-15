@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -30,6 +31,10 @@ from .validation import normalize_name
 
 def _emit(value: Any) -> None:
     print(json.dumps(value, indent=2, sort_keys=True))
+
+
+def _emit_progress(value: dict[str, Any]) -> None:
+    print(json.dumps(value, indent=2, sort_keys=True), file=sys.stderr, flush=True)
 
 
 def _add_configuration(parser: argparse.ArgumentParser) -> None:
@@ -155,6 +160,7 @@ def _onboard(args: argparse.Namespace) -> int:
         dry_run=args.dry_run,
         ingestion_timeout_seconds=args.ingestion_timeout_seconds,
         insights_timeout_seconds=args.insights_timeout_seconds,
+        progress_callback=_emit_progress,
     )
     _emit(result)
     return 0

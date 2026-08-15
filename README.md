@@ -52,6 +52,11 @@ the number of insights returned, includes a direct Foundry agent-monitor link fo
 reviewing details, identifies cost-bearing resources, and prints an ownership-checked
 cleanup command.
 
+As soon as the first Agent Insights run starts, the CLI prints the same direct portal
+link and explains that the first run may take **10–20 minutes**. Open the link immediately
+to watch progress; the onboarding agent continues monitoring the job and reports the
+verified result when it finishes.
+
 ## What the workflow changes
 
 The workflow applies only missing assignments at exact resource scopes. It never grants

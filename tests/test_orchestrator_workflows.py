@@ -341,13 +341,24 @@ def test_onboard_scratch_writes_resumable_receipts(
     )
     monkeypatch.setattr(orchestrator, "AgentInsightsClient", FakeInsights)
     FakeInsights.authorized = True
+    progress_events: list[dict[str, object]] = []
+
+    def complete_monitor(**kwargs):
+        kwargs["run_started_callback"]("monitor-1", "run-1")
+        return monitor, True
+
     monkeypatch.setattr(
         orchestrator,
         "_complete_monitor",
-        lambda **_kwargs: (monitor, True),
+        complete_monitor,
     )
 
-    final = orchestrator.onboard(config, run_id=run_id, cli=object())
+    final = orchestrator.onboard(
+        config,
+        run_id=run_id,
+        cli=object(),
+        progress_callback=progress_events.append,
+    )
 
     run_dir = tmp_path / run_id
     assert final["status"] == "complete"
@@ -364,6 +375,16 @@ def test_onboard_scratch_writes_resumable_receipts(
     assert read_json(run_dir / "plan.json")["run_id"] == run_id
     assert read_json(run_dir / "provisioning-receipt.json")["agent"]["version"] == "1"
     assert read_json(run_dir / "traffic-receipt.json")["status"] == "ingested"
+    assert progress_events == [read_json(run_dir / "run-started-receipt.json")]
+    assert progress_events[0]["status"] == "insights_running"
+    assert progress_events[0]["first_run_estimated_minutes"] == {
+        "minimum": 10,
+        "maximum": 20,
+    }
+    assert str(progress_events[0]["agent_insights_portal_url"]).endswith(
+        "/build/agents/insights-prompt-abc123de/monitor/overview?"
+        "tid=22222222-2222-2222-2222-222222222222"
+    )
     persisted_final = read_json(run_dir / "final-receipt.json")
     assert persisted_final["status"] == final["status"]
     assert persisted_final["monitor"]["insight_ids"] == ["insight-1"]
@@ -893,3 +914,52 @@ def test_existing_monitor_reuses_successful_result(
     assert read_json(tmp_path / "insights-receipt.json")[
         "reused_existing_run"
     ] is True
+
+
+def test_new_insights_run_reports_portal_handoff_before_waiting(
+    tmp_path,
+    make_deployment,
+) -> None:
+    started: list[tuple[str, str]] = []
+
+    class NewRunClient:
+        def get_or_create_monitor(self, **_kwargs):
+            return {
+                "id": "monitor-new",
+                "enabled": False,
+                "run_interval_hours": 24,
+            }, True
+
+        def create_run(self, _monitor_id, **_kwargs):
+            return {"id": "run-new"}
+
+        def wait_run(self, **_kwargs):
+            assert started == [("monitor-new", "run-new")]
+
+        def list_insights(self, _monitor_id):
+            return [{"id": "insight-new"}]
+
+        def get_monitor(self, _monitor_id):
+            return {
+                "id": "monitor-new",
+                "enabled": False,
+                "run_interval_hours": 24,
+            }
+
+    outcome, created = orchestrator._complete_monitor(
+        client=NewRunClient(),
+        run_dir=tmp_path,
+        deployment=make_deployment(),
+        model_deployment_name="model",
+        enable_monitor=False,
+        lookback_hours=168,
+        allow_existing_result=False,
+        timeout_seconds=10,
+        run_started_callback=lambda monitor_id, run_id: started.append(
+            (monitor_id, run_id)
+        ),
+    )
+
+    assert created is True
+    assert outcome.run_id == "run-new"
+    assert read_json(tmp_path / "insights-state.json")["status"] == "started"

@@ -10,7 +10,7 @@ import platform
 import secrets
 import sys
 import time
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any, cast
@@ -928,6 +928,7 @@ def _complete_monitor(
     lookback_hours: int,
     allow_existing_result: bool,
     timeout_seconds: float,
+    run_started_callback: Callable[[str, str], None] | None = None,
 ) -> tuple[MonitorOutcome, bool]:
     def schedule_fields(
         monitor: Mapping[str, Any],
@@ -1001,6 +1002,8 @@ def _complete_monitor(
                 "monitor_created": created,
             },
         )
+        if run_started_callback is not None:
+            run_started_callback(monitor_id, run_id)
     client.wait_run(
         monitor_id=monitor_id,
         run_id=run_id,
@@ -1111,6 +1114,7 @@ def onboard(
     ingestion_timeout_seconds: float = 900,
     insights_timeout_seconds: float = 21600,
     cli: AzureCli | None = None,
+    progress_callback: Callable[[dict[str, Any]], None] | None = None,
 ) -> dict[str, Any]:
     selected_cli = cli or AzureCli()
     doctor(config, selected_cli)
@@ -1274,6 +1278,33 @@ def onboard(
     traffic_payload["status"] = "ingested"
     traffic_payload["ingestion_evidence"] = ingestion_evidence
     write_json_atomic(run_dir / "traffic-receipt.json", traffic_payload)
+
+    def report_run_started(monitor_id: str, insights_run_id: str) -> None:
+        receipt_path = run_dir / "run-started-receipt.json"
+        progress = {
+            "status": "insights_running",
+            "onboarding_run_id": selected_run_id,
+            "monitor_id": monitor_id,
+            "insights_run_id": insights_run_id,
+            "agent_insights_portal_url": agent_insights_url(
+                resources.project_resource_id,
+                live_context.tenant_id,
+                deployment.name,
+            ),
+            "first_run_estimated_minutes": {
+                "minimum": 10,
+                "maximum": 20,
+            },
+            "message": (
+                "Open the Agent Insights portal now. The first run may take "
+                "10-20 minutes; onboarding will continue monitoring it."
+            ),
+            "receipt_path": str(receipt_path),
+        }
+        write_json_atomic(receipt_path, progress)
+        if progress_callback is not None:
+            progress_callback(progress)
+
     with AgentInsightsClient(
         project_endpoint=resources.project_endpoint,
         credential=credential,
@@ -1294,6 +1325,7 @@ def onboard(
             lookback_hours=config.lookback_hours,
             allow_existing_result=config.mode == "existing",
             timeout_seconds=insights_timeout_seconds,
+            run_started_callback=report_run_started,
         )
     return _finalize(
         run_dir=run_dir,

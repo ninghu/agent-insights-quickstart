@@ -118,8 +118,11 @@ reference for the selected path:
 
    The CLI freezes and prints a plan, then automatically applies it. Do not insert a
    second approval prompt for the planned RBAC writes.
-16. Report progress from the CLI's JSON events without exposing subprocess output that
-   the CLI redacted.
+16. When the CLI emits `status: insights_running`, immediately give the user its
+   `agent_insights_portal_url` and ask them to open it. Explain that the first run may
+   take 10–20 minutes. Keep monitoring the command and continue the workflow; do not
+   make the user wait without the portal link. Report other progress without exposing
+   subprocess output that the CLI redacted.
 17. Require a final receipt with `status: complete`. Give the user the Foundry portal
     link, first-result insight count, agent/version, monitor/run/insight IDs, cost
     estimate when returned by the service, schedule interval/next run when enabled,
