@@ -3,6 +3,8 @@
 __pycache__/
 *.py[cod]
 *.egg-info/
+.agents/skills/agent-insights-onboarding/assets/infra/main.json
+.agents/skills/agent-insights-onboarding/assets/infra/existing-connections.json
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
