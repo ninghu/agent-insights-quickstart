@@ -70,7 +70,18 @@ from .resource_ids import parse_resource_id
 from .traffic import generate_existing_traffic, generate_sample_traffic
 from .validation import validate_plan_context, validate_run_id
 
-_REPO_ROOT = Path(__file__).resolve().parents[5]
+_SKILL_ROOT = Path(__file__).resolve().parents[2]
+
+
+def _find_workspace_root(start: Path | None = None) -> Path:
+    current = (start or Path.cwd()).resolve()
+    for candidate in (current, *current.parents):
+        if (candidate / ".git").exists():
+            return candidate
+    return current
+
+
+_REPO_ROOT = _find_workspace_root()
 _RUNS_ROOT = _REPO_ROOT / ".agent-insights" / "runs"
 _PROVIDERS = (
     "Microsoft.CognitiveServices",
@@ -901,14 +912,7 @@ def _finalize(
 ) -> dict[str, Any]:
     cleanup_command = [
         sys.executable,
-        str(
-            _REPO_ROOT
-            / ".agents"
-            / "skills"
-            / "agent-insights-onboarding"
-            / "scripts"
-            / "agent_insights_onboard.py"
-        ),
+        str(_SKILL_ROOT / "scripts" / "agent_insights_onboard.py"),
         "cleanup",
         "--run-dir",
         str(run_dir),

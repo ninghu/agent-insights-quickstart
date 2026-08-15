@@ -24,6 +24,18 @@ class FakeInsights:
         return {"reachable": True, "authorized": self.authorized}
 
 
+def test_workspace_root_follows_current_git_repository(tmp_path) -> None:
+    project = tmp_path / "customer-project"
+    nested = project / "src" / "feature"
+    nested.mkdir(parents=True)
+    (project / ".git").mkdir()
+
+    assert orchestrator._find_workspace_root(nested) == project
+    assert orchestrator._find_workspace_root(tmp_path / "standalone") == (
+        tmp_path / "standalone"
+    )
+
+
 def _patch_common_doctor(monkeypatch, azure_context) -> None:
     monkeypatch.setattr(
         orchestrator,

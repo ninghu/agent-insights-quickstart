@@ -31,18 +31,19 @@ reference for the selected path:
 2. For scratch, ask the user to choose **Prompt Agent** or **Code-based Hosted Agent**.
 3. Check for Python 3.13+, Azure CLI 2.80+, and Git. If a tool is missing, ask before
    installing it and use only the vendor's documented installer.
-4. Create an ignored `.venv` with Python 3.13 when needed and install the reviewed
-   `scripts/requirements.txt` with `python -m pip`. Use that environment's Python for
-   every command below. Do not install into the system interpreter.
+4. Treat the directory containing this `SKILL.md` as `<skill-root>`. Create an ignored
+   `.venv` with Python 3.13 when needed and install the reviewed
+   `<skill-root>/scripts/requirements.txt` with `python -m pip`. Use that environment's
+   Python for every command below. Do not install into the system interpreter.
 5. Require an interactive Azure CLI user session. If necessary, run `az login`, then
    show the available subscriptions and ask the user to select one. Do not use a fixed
    tenant or subscription.
 6. Gather only the choices needed by the selected path. Prefer CLI discovery over
    asking the user to paste resource IDs.
-7. From the repository root, run the read-only doctor first:
+7. From the user's current repository root, run the read-only doctor first:
 
    ```text
-   python .agents/skills/agent-insights-onboarding/scripts/agent_insights_onboard.py doctor <arguments>
+   python "<skill-root>/scripts/agent_insights_onboard.py" doctor <arguments>
    ```
 
 8. Show the doctor's non-secret context and exact missing prerequisites. Stop before
@@ -52,7 +53,7 @@ reference for the selected path:
 9. When doctor returns `ready`, run:
 
    ```text
-   python .agents/skills/agent-insights-onboarding/scripts/agent_insights_onboard.py onboard <same arguments>
+   python "<skill-root>/scripts/agent_insights_onboard.py" onboard <same arguments>
    ```
 
    The CLI freezes and prints a plan, then automatically applies it. Do not insert a

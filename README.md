@@ -11,43 +11,43 @@ the complete path from permissions and telemetry to a visible first insight.
 
 ## Quick start
 
-Prerequisites:
-
-- Git
-- Python 3.13 or newer
-- Azure CLI 2.80 or newer
-- Copilot or another [Agent Skills](https://agentskills.io)-compatible agent
-- An Agent Insights-enabled Azure subscription
-- Permission to manage the selected resources and create scoped role assignments
+First, clone (enlist) the repository:
 
 ```shell
 git clone https://github.com/ninghu/agent-insights-quickstart
 cd agent-insights-quickstart
-az login
 ```
 
-The skill creates an ignored virtual environment and installs its reviewed, pinned
-Python requirements. It never installs into the system interpreter.
-
-Then ask your agent:
+Then open that folder in your preferred coding agent, such as **GitHub Copilot**,
+**Claude Code**, **Codex**, or any other
+[Agent Skills](https://agentskills.io)-compatible agent. Then ask:
 
 ```text
 Set up Agent Insights for me.
 ```
 
-Copilot discovers the skill from
-`.agents/skills/agent-insights-onboarding/SKILL.md`. You can also install it with
-GitHub CLI:
+That is all. The repository already contains the skill under `.agents/skills`; no
+separate skill installation is required. Your agent checks Python and Azure CLI,
+guides Azure sign-in, discovers available resources, and runs the read-only doctor
+before making changes.
+
+You still need an Agent Insights-enabled Azure subscription and permission to manage
+the selected resources. The workflow reports any missing access before mutation.
+
+### Use it without cloning this repository
+
+Install the self-contained skill into an existing project, selecting your agent host:
 
 ```shell
 gh skill install ninghu/agent-insights-quickstart \
-  agent-insights-onboarding@v0.1.1 \
-  --allow-hidden-dirs
+  agent-insights-onboarding@v0.1.2 \
+  --allow-hidden-dirs \
+  --agent AGENT_NAME
 ```
 
-The explicit hidden-directory flag tells GitHub CLI to include the standard
-`.agents/skills` project location. Preview the skill before installation with
-`gh skill preview` and the same flag.
+Use `github-copilot`, `claude-code`, or `codex` as `AGENT_NAME`. Reopen your agent in
+that project and use the same prompt. Cloning remains the simplest and most portable
+path.
 
 ## Onboarding paths
 
