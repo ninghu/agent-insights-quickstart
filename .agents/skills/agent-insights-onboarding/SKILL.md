@@ -62,6 +62,8 @@ reference for the selected path:
    Pass `--enable-existing-monitor` only when the user selects yes. A new monitor uses a
    24-hour interval; an existing monitor keeps its current interval. If the monitor is
    already enabled, preserve it and report its next scheduled run.
+   One-off runs use caller OBO. Do not plan Project MI model, project, or monitoring
+   roles unless scheduled generation is enabled.
 8. Select the insight generation model:
    - For an existing project, run `discover deployments` and recommend a current GPT-5+
      deployment.

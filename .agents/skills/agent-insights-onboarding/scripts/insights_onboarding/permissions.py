@@ -68,6 +68,7 @@ def required_assignments(
     workspace_id: str,
     agent_type: str,
     protected_trace_content: bool,
+    project_mi_execution: bool,
     manage_hosted_agent: bool = True,
 ) -> list[RequiredAssignment]:
     user_role = (
@@ -75,48 +76,57 @@ def required_assignments(
         if agent_type == "hosted" and manage_hosted_agent
         else FOUNDRY_USER
     )
-    assignments = [
-        RequiredAssignment(
-            project_principal_id,
-            "ServicePrincipal",
-            COGNITIVE_SERVICES_OPENAI_USER,
-            foundry_account_id,
-        ),
-        RequiredAssignment(
-            project_principal_id,
-            "ServicePrincipal",
-            FOUNDRY_USER,
-            project_id,
-        ),
-        RequiredAssignment(
-            project_principal_id,
-            "ServicePrincipal",
-            MONITORING_READER,
-            application_insights_id,
-        ),
-        RequiredAssignment(current_user_id, "User", user_role, project_id),
-        RequiredAssignment(
-            current_user_id,
-            "User",
-            MONITORING_READER,
-            application_insights_id,
-        ),
-    ]
-    if protected_trace_content:
+    assignments: list[RequiredAssignment] = []
+    if project_mi_execution:
         assignments.extend(
             (
                 RequiredAssignment(
                     project_principal_id,
                     "ServicePrincipal",
-                    PRIVILEGED_MONITORING_DATA_READER,
-                    workspace_id,
+                    COGNITIVE_SERVICES_OPENAI_USER,
+                    foundry_account_id,
                 ),
                 RequiredAssignment(
-                    current_user_id,
-                    "User",
+                    project_principal_id,
+                    "ServicePrincipal",
+                    FOUNDRY_USER,
+                    project_id,
+                ),
+                RequiredAssignment(
+                    project_principal_id,
+                    "ServicePrincipal",
+                    MONITORING_READER,
+                    application_insights_id,
+                ),
+            )
+        )
+    assignments.extend(
+        (
+            RequiredAssignment(current_user_id, "User", user_role, project_id),
+            RequiredAssignment(
+                current_user_id,
+                "User",
+                MONITORING_READER,
+                application_insights_id,
+            ),
+        )
+    )
+    if protected_trace_content:
+        if project_mi_execution:
+            assignments.append(
+                RequiredAssignment(
+                    project_principal_id,
+                    "ServicePrincipal",
                     PRIVILEGED_MONITORING_DATA_READER,
                     workspace_id,
-                ),
+                )
+            )
+        assignments.append(
+            RequiredAssignment(
+                current_user_id,
+                "User",
+                PRIVILEGED_MONITORING_DATA_READER,
+                workspace_id,
             )
         )
     return assignments

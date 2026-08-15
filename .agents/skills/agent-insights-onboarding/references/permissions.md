@@ -21,12 +21,16 @@ alone never authorizes scheduling.
 
 ## Default remediation policy for native model deployments
 
+Hosted one-off runs use the current caller through OBO. The workflow plans Project MI
+assignments only for scheduled generation; selecting one-off does not create or repair
+Project MI model, project, or monitoring roles.
+
 | Principal | Role ID | Scope | Purpose |
 | --- | --- | --- | --- |
 | Project managed identity | `5e0bd9bd-7b93-4f28-af87-19fc36ad61bd` (Cognitive Services OpenAI User) | Parent Foundry account | Exact native-model inference data actions required by scheduled insights |
 | Project managed identity | `53ca6127-db72-4b80-b1b0-d745d6d5456d` (Foundry User) | Foundry project | Direct/native deployment metadata read during scheduled admission |
-| Project managed identity | `43d0d8ad-25c7-4714-9337-8ba259a9fe05` (Monitoring Reader) | Application Insights component | Component-centric telemetry query |
-| Project managed identity | `dbc9c667-e97f-4491-aee6-90b9cf960190` (Privileged Monitoring Data Reader) | Linked Log Analytics workspace | Protected `AppGenAIContent` reads |
+| Project managed identity | `43d0d8ad-25c7-4714-9337-8ba259a9fe05` (Monitoring Reader) | Application Insights component | Scheduled component-centric telemetry query |
+| Project managed identity | `dbc9c667-e97f-4491-aee6-90b9cf960190` (Privileged Monitoring Data Reader) | Linked Log Analytics workspace | Scheduled protected `AppGenAIContent` reads |
 | Current user | `53ca6127-db72-4b80-b1b0-d745d6d5456d` (Foundry User) | Foundry project | Prompt Agent management and invocation |
 | Current user | `eadc314b-1a2d-4efa-be10-5d325db5065e` (Foundry Project Manager) | Foundry project | Source-code Hosted Agent deployment |
 | Current user | `43d0d8ad-25c7-4714-9337-8ba259a9fe05` (Monitoring Reader) | Application Insights component | Telemetry and delegated on-demand reads |
@@ -45,6 +49,8 @@ response.
 - The caller operates the public Agent Insights and Foundry APIs.
 - The project managed identity runs scheduled Agent Insights operations against the
   customer's telemetry and analysis model.
+- Hosted one-off runs use caller OBO; their model and telemetry authorization comes
+  from the current user rather than Project MI.
 - A Hosted Agent receives a separate platform-created identity. It has implicit access
   to project model/session capabilities when it uses the project endpoint. The workflow
   does not add speculative account-wide roles to this identity.

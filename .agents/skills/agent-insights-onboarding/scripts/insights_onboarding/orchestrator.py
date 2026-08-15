@@ -368,7 +368,8 @@ def doctor(config: OnboardingConfig, cli: AzureCli | None = None) -> dict[str, A
         selected_cli,
         resources.project_resource_id,
     )
-    if not resources.project_principal_id:
+    project_mi_execution = config.enable_existing_monitor
+    if project_mi_execution and not resources.project_principal_id:
         require_actions(
             permissions_at_scope(selected_cli, resources.project_resource_id),
             ["Microsoft.CognitiveServices/accounts/projects/write"],
@@ -411,7 +412,7 @@ def doctor(config: OnboardingConfig, cli: AzureCli | None = None) -> dict[str, A
                 "Existing Agent kind differs from the selected permission policy.",
                 {"selected": config.agent_type, "actual": deployment.kind},
             )
-    if resources.project_principal_id:
+    if resources.project_principal_id or not project_mi_execution:
         assignments = required_assignments(
             current_user_id=context.user_object_id,
             project_principal_id=resources.project_principal_id,
@@ -421,6 +422,7 @@ def doctor(config: OnboardingConfig, cli: AzureCli | None = None) -> dict[str, A
             workspace_id=resources.log_analytics_workspace_resource_id,
             agent_type=config.agent_type,
             protected_trace_content=config.protected_trace_content,
+            project_mi_execution=project_mi_execution,
             manage_hosted_agent=False,
         )
         assignments = _filter_existing_caller_assignments(
@@ -577,7 +579,8 @@ def build_plan(
         )
     else:
         resources = resolve_existing(cli, config=config)
-        if not resources.project_principal_id:
+        project_mi_execution = config.enable_existing_monitor
+        if project_mi_execution and not resources.project_principal_id:
             mutations.append(
                 Mutation(
                     "enable_project_system_identity",
@@ -602,7 +605,9 @@ def build_plan(
                     },
                 )
             )
-        if resources.project_principal_id and config.agent_type:
+        if config.agent_type and (
+            resources.project_principal_id or not project_mi_execution
+        ):
             assignments = required_assignments(
                 current_user_id=context.user_object_id,
                 project_principal_id=resources.project_principal_id,
@@ -612,6 +617,7 @@ def build_plan(
                 workspace_id=resources.log_analytics_workspace_resource_id,
                 agent_type=config.agent_type,
                 protected_trace_content=config.protected_trace_content,
+                project_mi_execution=project_mi_execution,
                 manage_hosted_agent=False,
             )
             foundry_authorized, monitoring_authorized = (
@@ -627,7 +633,7 @@ def build_plan(
                 monitoring_authorized=monitoring_authorized,
             )
             mutations.extend(_role_mutations(cli, assignments))
-        elif not resources.project_principal_id:
+        elif project_mi_execution and not resources.project_principal_id:
             mutations.extend(
                 _unresolved_identity_role_mutations(
                     config=config,
@@ -729,7 +735,8 @@ def _apply_existing(
     run_id: str,
 ) -> tuple[ProjectResources, tuple[str, ...]]:
     initial = resolve_existing(cli, config=config)
-    ensure_project_identity(cli, project_resource_id=initial.project_resource_id)
+    if config.enable_existing_monitor:
+        ensure_project_identity(cli, project_resource_id=initial.project_resource_id)
     project = get_project(cli, initial.project_resource_id)
     location = str(project.get("location") or "")
     connection_ids = ensure_existing_connections(
@@ -740,7 +747,7 @@ def _apply_existing(
         run_id=run_id,
     )
     resources = resolve_existing(cli, config=config)
-    if not resources.project_principal_id:
+    if config.enable_existing_monitor and not resources.project_principal_id:
         raise OnboardingError(
             "project_identity_failed",
             "Project identity was still unavailable after update.",
@@ -769,6 +776,8 @@ def _ensure_roles(
         workspace_id=resources.log_analytics_workspace_resource_id,
         agent_type=config.agent_type,
         protected_trace_content=config.protected_trace_content,
+        project_mi_execution=config.mode == "scratch"
+        or config.enable_existing_monitor,
         manage_hosted_agent=config.mode == "scratch",
     )
     if config.mode == "scratch":

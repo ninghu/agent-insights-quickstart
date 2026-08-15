@@ -55,7 +55,8 @@ cleanup command.
 ## What the workflow changes
 
 The workflow applies only missing assignments at exact resource scopes. It never grants
-Owner. For the supported native model path, common assignments include:
+Owner. One-off runs use the current user's delegated access. When scheduled generation
+is enabled on the supported native model path, Project MI assignments include:
 
 - Cognitive Services OpenAI User for the project managed identity on the native model
   account
@@ -63,8 +64,9 @@ Owner. For the supported native model path, common assignments include:
 - Monitoring Reader on the connected Application Insights component
 - Privileged Monitoring Data Reader on the linked Log Analytics workspace when trace
   content is protected
-- Foundry User or Foundry Project Manager for the current user on the selected project,
-  depending on the sample agent type
+The current user receives Foundry User or Foundry Project Manager on the selected
+project, depending on the sample agent type, plus monitoring access needed by the
+one-off run. Selecting one-off does not grant Project MI model-inference access.
 
 If the caller cannot create a required assignment, the workflow stops before mutation
 and produces an exact admin handoff with principal, role, scope, and Azure CLI command.

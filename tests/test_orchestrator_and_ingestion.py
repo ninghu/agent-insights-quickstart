@@ -123,7 +123,7 @@ def test_build_plan_for_existing_covers_role_connection_and_monitor_paths(
     assert plan.expected["monitor_enabled"] is True
 
 
-def test_build_plan_adds_identity_mutation_when_project_has_no_principal(
+def test_build_plan_scheduled_adds_identity_mutation_when_project_has_no_principal(
     monkeypatch, make_config, make_resources, azure_context, azure_ids, run_id: str
 ) -> None:
     monkeypatch.setattr(models, "datetime", FrozenDateTime)
@@ -149,6 +149,7 @@ def test_build_plan_adds_identity_mutation_when_project_has_no_principal(
             agent_name="existing-agent",
             model_deployment_name="gpt-4-1-mini",
             agent_type="prompt",
+            enable_existing_monitor=True,
         ),
         context=azure_context,
         run_id=run_id,
@@ -161,10 +162,128 @@ def test_build_plan_adds_identity_mutation_when_project_has_no_principal(
         "create_app_insights_connections",
     ]
     assert kinds.count("ensure_role_assignment_after_identity") == 5
-    assert kinds[-2:] == [
+    assert kinds[-3:] == [
         "create_or_reuse_monitor",
         "create_or_reuse_agent_insights_result",
+        "enable_monitor",
     ]
+
+
+def test_build_plan_one_off_skips_project_identity_mutations(
+    monkeypatch, make_config, make_resources, azure_context, azure_ids, run_id: str
+) -> None:
+    monkeypatch.setattr(models, "datetime", FrozenDateTime)
+    monkeypatch.setattr(
+        orchestrator,
+        "resolve_existing",
+        lambda _cli, config: make_resources(project_principal_id=""),
+    )
+    monkeypatch.setattr(orchestrator, "list_app_insights_connections", lambda *_args: [])
+    monkeypatch.setattr(
+        orchestrator,
+        "plan_existing_connections",
+        lambda *_args, **_kwargs: {
+            "project_connection_name": "agent-insights-test",
+        },
+    )
+    monkeypatch.setattr(
+        orchestrator,
+        "_existing_caller_capabilities",
+        lambda **_kwargs: (False, False),
+    )
+    planned_assignments = []
+
+    def capture_assignments(_cli, assignments):
+        planned_assignments.extend(assignments)
+        return []
+
+    monkeypatch.setattr(orchestrator, "_role_mutations", capture_assignments)
+
+    plan = orchestrator.build_plan(
+        make_config(
+            mode="existing",
+            location=None,
+            project_resource_id=azure_ids["project"],
+            agent_name="existing-agent",
+            model_deployment_name="gpt-4-1-mini",
+            agent_type="prompt",
+        ),
+        context=azure_context,
+        run_id=run_id,
+        cli=object(),
+    )
+
+    kinds = [mutation["kind"] for mutation in plan.mutations]
+    assert "enable_project_system_identity" not in kinds
+    assert "ensure_role_assignment_after_identity" not in kinds
+    assert all(item.principal_type == "User" for item in planned_assignments)
+
+
+@pytest.mark.parametrize(
+    ("enable_schedule", "resolved_principal_id", "expected_identity_updates"),
+    (
+        (False, "", 0),
+        (True, "44444444-4444-4444-4444-444444444444", 1),
+    ),
+)
+def test_apply_existing_enables_project_identity_only_for_schedule(
+    monkeypatch,
+    make_config,
+    make_resources,
+    azure_context,
+    run_id: str,
+    enable_schedule: bool,
+    resolved_principal_id: str,
+    expected_identity_updates: int,
+) -> None:
+    resources = iter(
+        (
+            make_resources(project_principal_id=""),
+            make_resources(project_principal_id=resolved_principal_id),
+        )
+    )
+    monkeypatch.setattr(
+        orchestrator,
+        "resolve_existing",
+        lambda *_args, **_kwargs: next(resources),
+    )
+    identity_updates: list[str] = []
+    monkeypatch.setattr(
+        orchestrator,
+        "ensure_project_identity",
+        lambda _cli, *, project_resource_id: identity_updates.append(
+            project_resource_id
+        ),
+    )
+    monkeypatch.setattr(
+        orchestrator,
+        "get_project",
+        lambda *_args, **_kwargs: {"location": "westus3"},
+    )
+    monkeypatch.setattr(
+        orchestrator,
+        "ensure_existing_connections",
+        lambda *_args, **_kwargs: (),
+    )
+
+    result, connection_ids = orchestrator._apply_existing(
+        object(),
+        config=make_config(
+            mode="existing",
+            location=None,
+            project_resource_id=make_resources().project_resource_id,
+            agent_name="existing-agent",
+            model_deployment_name="gpt-4-1-mini",
+            agent_type="prompt",
+            enable_existing_monitor=enable_schedule,
+        ),
+        context=azure_context,
+        run_id=run_id,
+    )
+
+    assert result.project_principal_id == resolved_principal_id
+    assert connection_ids == ()
+    assert len(identity_updates) == expected_identity_updates
 
 
 def test_verify_stored_plan_detects_mutation_tampering(
