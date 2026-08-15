@@ -440,6 +440,8 @@ def test_existing_monitor_reuses_successful_result(
             return {
                 "id": "monitor-existing",
                 "enabled": True,
+                "run_interval_hours": 24,
+                "next_scheduled_run_at": "2026-01-02T00:00:00+00:00",
                 "estimated_cost": {"amount": 1.5, "currency": "USD"},
             }, False
 
@@ -469,6 +471,8 @@ def test_existing_monitor_reuses_successful_result(
     assert created is False
     assert outcome.run_id == "run-existing"
     assert outcome.insight_ids == ("insight-existing",)
+    assert outcome.run_interval_hours == 24
+    assert outcome.next_scheduled_run_at == "2026-01-02T00:00:00+00:00"
     assert read_json(tmp_path / "insights-receipt.json")[
         "reused_existing_run"
     ] is True

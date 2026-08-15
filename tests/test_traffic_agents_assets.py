@@ -157,3 +157,5 @@ def test_skill_asks_project_choice_before_azure_details(repo_root) -> None:
     question_index = skill.index(question)
     assert question_index < skill.index("project endpoint first")
     assert question_index < skill.index("enabled subscriptions")
+    assert "If exactly one Application Insights connection exists, reuse it" in skill
+    assert "should scheduled\n   insight generation be enabled?" in skill

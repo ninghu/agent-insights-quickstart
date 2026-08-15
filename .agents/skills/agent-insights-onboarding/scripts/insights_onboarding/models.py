@@ -140,3 +140,5 @@ class MonitorOutcome:
     insight_ids: tuple[str, ...]
     estimated_cost: dict[str, Any] | None
     enabled: bool
+    run_interval_hours: float | None = None
+    next_scheduled_run_at: str | None = None

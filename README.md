@@ -43,7 +43,7 @@ Install the self-contained skill into an existing project, selecting your agent 
 
 ```shell
 gh skill install ninghu/agent-insights-quickstart \
-  agent-insights-onboarding@v0.1.3 \
+  agent-insights-onboarding@v0.1.4 \
   --allow-hidden-dirs \
   --agent AGENT_NAME
 ```
@@ -56,7 +56,7 @@ path.
 
 | Path | Result |
 | --- | --- |
-| Existing Foundry project | Discovers the project, agent, model, and Application Insights connection; repairs missing scoped access; preserves existing monitor settings; validates an Agent Insights result. |
+| Existing Foundry project | Resolves the endpoint, validates or creates the Application Insights connection, repairs missing scoped access, validates an Agent Insights result, and asks whether to enable scheduled generation. |
 | Create a new Foundry project | Creates a tagged scratch project and monitoring stack, deploys either a Prompt Agent or source-code Hosted Agent, sends bounded sample traffic, enables Agent Insights, and verifies a first insight. |
 
 The scratch environment stays available after success. The final receipt identifies

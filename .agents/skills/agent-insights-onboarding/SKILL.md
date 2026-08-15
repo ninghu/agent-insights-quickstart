@@ -44,22 +44,39 @@ reference for the selected path:
    `discover project --project-endpoint <endpoint>` to resolve its subscription and ARM
    resource ID across enabled subscriptions in the active tenant. Ask for a subscription
    only if the endpoint cannot be resolved or is ambiguous.
-6. When creating a new project, ask the user to choose **Prompt Agent** or
+6. For an existing project, run `discover connections` with the resolved subscription
+   and project resource ID:
+   - If exactly one Application Insights connection exists, reuse it without asking the
+     user to choose another component.
+   - If none exists, run `discover app-insights` in the project's resource group first,
+     then subscription-wide if needed. Ask the user to select a component; the onboarding
+     CLI creates the missing project/account connection and scoped access.
+   - If multiple Application Insights connections exist, stop with the ambiguity instead
+     of guessing or deleting one.
+7. For an existing project, ask: **After the first insight result, should scheduled
+   insight generation be enabled?** Offer:
+   - **Yes, enable scheduled insights (Recommended)**
+   - **No, keep this as a one-off**
+
+   Pass `--enable-existing-monitor` only when the user selects yes. A new monitor uses a
+   24-hour interval; an existing monitor keeps its current interval. If the monitor is
+   already enabled, preserve it and report its next scheduled run.
+8. When creating a new project, ask the user to choose **Prompt Agent** or
    **Code-based Hosted Agent**, then show enabled subscriptions and ask them to select
    one.
-7. Gather only the choices needed by the selected path. Prefer CLI discovery over
+9. Gather only the choices needed by the selected path. Prefer CLI discovery over
    asking the user to paste resource IDs.
-8. From the user's current repository root, run the read-only doctor first:
+10. From the user's current repository root, run the read-only doctor first:
 
    ```text
    python "<skill-root>/scripts/agent_insights_onboard.py" doctor <arguments>
    ```
 
-9. Show the doctor's non-secret context and exact missing prerequisites. Stop before
+11. Show the doctor's non-secret context and exact missing prerequisites. Stop before
    mutation if the subscription is not Agent Insights-enabled, the cloud is not
    `AzureCloud`, permissions are insufficient, the model lacks quota, or resources are
    ambiguous.
-10. When doctor returns `ready`, run:
+12. When doctor returns `ready`, run:
 
    ```text
    python "<skill-root>/scripts/agent_insights_onboard.py" onboard <same arguments>
@@ -67,11 +84,11 @@ reference for the selected path:
 
    The CLI freezes and prints a plan, then automatically applies it. Do not insert a
    second approval prompt for the planned RBAC writes.
-11. Report progress from the CLI's JSON events without exposing subprocess output that
+13. Report progress from the CLI's JSON events without exposing subprocess output that
    the CLI redacted.
-12. Require a final receipt with `status: complete`. Give the user the Foundry portal
+14. Require a final receipt with `status: complete`. Give the user the Foundry portal
     link, agent/version, monitor/run/insight IDs, cost estimate when returned by the
-    service, receipt path, and cleanup command.
+    service, schedule interval/next run when enabled, receipt path, and cleanup command.
 
 ## Recovery
 

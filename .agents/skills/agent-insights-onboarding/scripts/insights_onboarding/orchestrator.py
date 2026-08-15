@@ -10,6 +10,7 @@ import platform
 import secrets
 import sys
 import time
+from collections.abc import Mapping
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any, cast
@@ -811,6 +812,18 @@ def _complete_monitor(
     allow_existing_result: bool,
     timeout_seconds: float,
 ) -> tuple[MonitorOutcome, bool]:
+    def schedule_fields(
+        monitor: Mapping[str, Any],
+    ) -> tuple[float | None, str | None]:
+        raw_interval = monitor.get("run_interval_hours")
+        interval = (
+            float(raw_interval)
+            if isinstance(raw_interval, (int, float))
+            else None
+        )
+        next_run = str(monitor.get("next_scheduled_run_at") or "") or None
+        return interval, next_run
+
     state_path = run_dir / "insights-state.json"
     if state_path.exists():
         state = read_json(state_path)
@@ -834,6 +847,7 @@ def _complete_monitor(
                 final_monitor = monitor
                 if enable_monitor and not bool(monitor.get("enabled")):
                     final_monitor = client.enable_monitor(monitor_id)
+                interval, next_run = schedule_fields(final_monitor)
                 outcome = MonitorOutcome(
                     monitor_id=monitor_id,
                     run_id=str(succeeded_runs[0].get("id") or ""),
@@ -846,6 +860,8 @@ def _complete_monitor(
                         else None
                     ),
                     enabled=bool(final_monitor.get("enabled")),
+                    run_interval_hours=interval,
+                    next_scheduled_run_at=next_run,
                 )
                 write_json_atomic(
                     run_dir / "insights-receipt.json",
@@ -883,6 +899,7 @@ def _complete_monitor(
     monitor = client.get_monitor(monitor_id)
     if enable_monitor and not bool(monitor.get("enabled")):
         monitor = client.enable_monitor(monitor_id)
+    interval, next_run = schedule_fields(monitor)
     outcome = MonitorOutcome(
         monitor_id=monitor_id,
         run_id=run_id,
@@ -893,6 +910,8 @@ def _complete_monitor(
             else None
         ),
         enabled=bool(monitor.get("enabled")),
+        run_interval_hours=interval,
+        next_scheduled_run_at=next_run,
     )
     write_json_atomic(
         run_dir / "insights-receipt.json",

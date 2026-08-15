@@ -19,6 +19,10 @@ or models.
 
 ## Mutation rules
 
+- Check project-level Application Insights connections before any monitor operation.
+  Reuse one valid connection. If none exists, discover a component in the project
+  resource group or subscription and create the missing account/project connections.
+  Multiple connections fail as ambiguous; never guess or delete one.
 - Enable a missing project system identity only on the exact selected project.
 - Create an App Insights connection only when none exists and the user selected the
   target component.
@@ -37,3 +41,8 @@ Require recent correlated traces, a terminal successful run, and at least one re
 insight. Reuse an existing successful run and insight collection instead of creating a
 duplicate run. If no usable result or fresh traces exist and invocation is declined,
 stop with the exact trace-generation requirement rather than reporting partial success.
+
+Ask whether to enable scheduled generation after the first result. When selected, enable
+the monitor with its existing interval or the new-monitor default of 24 hours. Report the
+effective interval and next scheduled run. Choosing one-off leaves a disabled monitor
+disabled; an already-enabled monitor is never disabled.

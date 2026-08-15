@@ -13,6 +13,8 @@ from .agents import project_client
 from .azure_cli import AzureCli
 from .discovery import (
     find_project_by_endpoint,
+    list_app_insights_connections,
+    list_application_insights,
     list_projects,
     list_subscriptions,
     select_context,
@@ -185,6 +187,34 @@ def _discover(args: argparse.Namespace) -> int:
             }
         )
         return 0
+    if args.kind == "app-insights":
+        _emit(
+            {
+                "status": "complete",
+                "application_insights": list_application_insights(
+                    cli,
+                    args.subscription_id,
+                    resource_group=args.resource_group,
+                ),
+            }
+        )
+        return 0
+    if args.kind == "connections":
+        if not args.project_resource_id:
+            raise OnboardingError(
+                "missing_project_resource_id",
+                "Connection discovery requires --project-resource-id.",
+            )
+        _emit(
+            {
+                "status": "complete",
+                "application_insights_connections": list_app_insights_connections(
+                    cli,
+                    args.project_resource_id,
+                ),
+            }
+        )
+        return 0
     if not args.project_endpoint:
         raise OnboardingError(
             "missing_project_endpoint",
@@ -227,10 +257,19 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     discover_parser.add_argument(
         "kind",
-        choices=("subscriptions", "project", "projects", "agents"),
+        choices=(
+            "subscriptions",
+            "project",
+            "projects",
+            "connections",
+            "app-insights",
+            "agents",
+        ),
     )
     discover_parser.add_argument("--subscription-id")
     discover_parser.add_argument("--project-endpoint")
+    discover_parser.add_argument("--project-resource-id")
+    discover_parser.add_argument("--resource-group")
     discover_parser.set_defaults(handler=_discover)
 
     doctor_parser = subparsers.add_parser(

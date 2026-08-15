@@ -141,6 +141,47 @@ def list_projects(cli: AzureCli, subscription_id: str) -> list[dict[str, Any]]:
     ]
 
 
+def list_application_insights(
+    cli: AzureCli,
+    subscription_id: str,
+    *,
+    resource_group: str | None = None,
+) -> list[dict[str, str]]:
+    arguments = [
+        "resource",
+        "list",
+        "--subscription",
+        subscription_id,
+        "--resource-type",
+        "Microsoft.Insights/components",
+    ]
+    if resource_group:
+        arguments.extend(("--resource-group", resource_group))
+    value = cli.json(arguments)
+    if not isinstance(value, list):
+        raise OnboardingError(
+            "invalid_application_insights_list",
+            "Azure CLI returned an invalid Application Insights list.",
+        )
+    components: list[dict[str, str]] = []
+    for item in value:
+        if not isinstance(item, Mapping) or not item.get("id"):
+            continue
+        resource_id = require_resource_type(
+            str(item["id"]),
+            "Microsoft.Insights/components",
+        )
+        components.append(
+            {
+                "id": resource_id.raw,
+                "name": resource_id.name,
+                "resource_group": resource_id.resource_group,
+                "location": str(item.get("location") or ""),
+            }
+        )
+    return components
+
+
 def find_project_by_endpoint(cli: AzureCli, project_endpoint: str) -> dict[str, str]:
     endpoint = validate_project_endpoint(project_endpoint)
     parsed_endpoint = urlparse(endpoint)

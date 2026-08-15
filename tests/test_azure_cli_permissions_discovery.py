@@ -14,6 +14,7 @@ from insights_onboarding.discovery import (
     find_project_by_endpoint,
     linked_workspace_id,
     list_app_insights_connections,
+    list_application_insights,
     model_is_available,
     model_quota_available,
     parse_version,
@@ -115,6 +116,39 @@ def test_project_endpoint_reports_active_tenant_miss() -> None:
             "https://demo-account.services.ai.azure.com/api/projects/demo-project",
         )
     assert excinfo.value.code == "project_not_found_in_active_tenant"
+
+
+def test_application_insights_discovery_can_scope_to_resource_group(
+    azure_ids: dict[str, str],
+) -> None:
+    cli = StubCli(
+        json_values=[
+            [
+                {
+                    "id": azure_ids["app_insights"],
+                    "name": "demo-appi",
+                    "location": "westus3",
+                }
+            ]
+        ]
+    )
+
+    components = list_application_insights(
+        cli,
+        "11111111-1111-1111-1111-111111111111",
+        resource_group="rg-agent-insights",
+    )
+
+    assert components == [
+        {
+            "id": azure_ids["app_insights"],
+            "name": "demo-appi",
+            "resource_group": "rg-agent-insights",
+            "location": "westus3",
+        }
+    ]
+    arguments = cli.json_calls[0][0]
+    assert arguments[-2:] == ["--resource-group", "rg-agent-insights"]
 
 
 def test_azure_cli_json_successfully_parses_stdout() -> None:
