@@ -172,3 +172,5 @@ def test_skill_asks_project_choice_before_azure_details(repo_root) -> None:
         "Never enable scheduling based only on the user's confirmation."
         in normalized
     )
+    assert "Insights generated: <insight_count>" in skill
+    assert "Review details: <agent_insights_portal_url>" in skill

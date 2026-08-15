@@ -95,8 +95,16 @@ reference for the selected path:
 14. Report progress from the CLI's JSON events without exposing subprocess output that
    the CLI redacted.
 15. Require a final receipt with `status: complete`. Give the user the Foundry portal
-    link, agent/version, monitor/run/insight IDs, cost estimate when returned by the
-    service, schedule interval/next run when enabled, receipt path, and cleanup command.
+    link, first-result insight count, agent/version, monitor/run/insight IDs, cost
+    estimate when returned by the service, schedule interval/next run when enabled,
+    receipt path, and cleanup command. End with this concise handoff:
+
+    ```text
+    Agent Insights setup complete.
+    Insights generated: <insight_count>
+    Review details: <agent_insights_portal_url>
+    In Foundry, open Monitor > Agent Insights if the link lands on project home.
+    ```
 
 ## Recovery
 

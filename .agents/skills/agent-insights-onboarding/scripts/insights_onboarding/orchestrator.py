@@ -58,6 +58,7 @@ from .permissions import (
     require_actions,
     required_assignments,
 )
+from .portal import agent_insights_url, foundry_project_url
 from .provisioning import (
     cleanup_scratch,
     ensure_existing_connections,
@@ -988,6 +989,18 @@ def _finalize(
         "--run-dir",
         str(run_dir),
     ]
+    insight_count = len(monitor.insight_ids)
+    project_portal_url = foundry_project_url(
+        resources.project_resource_id,
+        context.tenant_id,
+    )
+    insights_portal_url = agent_insights_url(
+        resources.project_resource_id,
+        context.tenant_id,
+        deployment.name,
+    )
+    monitor_payload = asdict(monitor)
+    monitor_payload["insight_count"] = insight_count
     final = {
         "status": "complete",
         "run_id": plan["run_id"],
@@ -995,8 +1008,25 @@ def _finalize(
         "mode": plan["mode"],
         "project": asdict(resources),
         "agent": asdict(deployment),
-        "monitor": asdict(monitor),
-        "foundry_portal_url": "https://ai.azure.com/",
+        "monitor": monitor_payload,
+        "result_summary": {
+            "insight_count": insight_count,
+            "message": (
+                f"Agent Insights returned {insight_count} insight"
+                + ("" if insight_count == 1 else "s")
+                + " for the first verified result."
+            ),
+            "schedule_enabled": monitor.enabled,
+            "run_interval_hours": monitor.run_interval_hours,
+            "next_scheduled_run_at": monitor.next_scheduled_run_at,
+        },
+        "foundry_portal_url": insights_portal_url,
+        "foundry_project_url": project_portal_url,
+        "agent_insights_portal_url": insights_portal_url,
+        "portal_instructions": (
+            "Open the Agent Insights link. If the portal redirects to project home, "
+            "select Monitor, choose the agent, and open Agent Insights."
+        ),
         "azure_resource_url": (
             f"https://portal.azure.com/#@{context.tenant_id}/resource"
             f"{resources.project_resource_id}"

@@ -264,13 +264,23 @@ def test_onboard_scratch_writes_resumable_receipts(
 
     run_dir = tmp_path / run_id
     assert final["status"] == "complete"
-    assert final["monitor"] == asdict(monitor)
+    assert final["monitor"] == {**asdict(monitor), "insight_count": 1}
+    assert final["monitor"]["insight_count"] == 1
+    assert final["result_summary"]["insight_count"] == 1
+    assert final["result_summary"]["message"] == (
+        "Agent Insights returned 1 insight for the first verified result."
+    )
+    assert final["agent_insights_portal_url"].endswith(
+        "/build/agents/insights-prompt-abc123de/monitor/overview?"
+        "tid=22222222-2222-2222-2222-222222222222"
+    )
     assert read_json(run_dir / "plan.json")["run_id"] == run_id
     assert read_json(run_dir / "provisioning-receipt.json")["agent"]["version"] == "1"
     assert read_json(run_dir / "traffic-receipt.json")["status"] == "ingested"
     persisted_final = read_json(run_dir / "final-receipt.json")
     assert persisted_final["status"] == final["status"]
     assert persisted_final["monitor"]["insight_ids"] == ["insight-1"]
+    assert persisted_final["result_summary"]["insight_count"] == 1
 
     with pytest.raises(orchestrator.OnboardingError) as replay:
         orchestrator.onboard(config, run_id=run_id, cli=object())
