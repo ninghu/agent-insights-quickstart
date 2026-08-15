@@ -23,7 +23,7 @@ alone never authorizes scheduling.
 
 | Principal | Role ID | Scope | Purpose |
 | --- | --- | --- | --- |
-| Project managed identity | `53ca6127-db72-4b80-b1b0-d745d6d5456d` (Foundry User) | Parent Foundry account | Scheduled model inference and project data-plane access |
+| Project managed identity | `5e0bd9bd-7b93-4f28-af87-19fc36ad61bd` (Cognitive Services OpenAI User) | Parent Foundry account | Exact native-model inference data actions required by scheduled insights |
 | Project managed identity | `43d0d8ad-25c7-4714-9337-8ba259a9fe05` (Monitoring Reader) | Application Insights component | Component-centric telemetry query |
 | Project managed identity | `dbc9c667-e97f-4491-aee6-90b9cf960190` (Privileged Monitoring Data Reader) | Linked Log Analytics workspace | Protected `AppGenAIContent` reads |
 | Current user | `53ca6127-db72-4b80-b1b0-d745d6d5456d` (Foundry User) | Foundry project | Prompt Agent management and invocation |
@@ -48,6 +48,14 @@ response.
   does not add speculative account-wide roles to this identity.
 
 Access for one identity never substitutes for another.
+
+Scheduled Agent Insights resolves agent, connection, and most model metadata through
+service-to-service calls. It does not require broad Foundry metadata access on the
+Project MI. For the quickstart's native Foundry deployment, the service validates the
+exact `Microsoft.CognitiveServices/accounts/OpenAI/deployments/chat/completions/action`;
+the narrower Cognitive Services OpenAI User role supplies that action. API-key and
+project-Responses model connections have different authentication paths and do not use
+this assignment.
 
 ## References
 

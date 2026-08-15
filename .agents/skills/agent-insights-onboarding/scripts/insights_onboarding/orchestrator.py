@@ -46,6 +46,7 @@ from .models import (
     TrafficOutcome,
 )
 from .permissions import (
+    COGNITIVE_SERVICES_OPENAI_USER,
     FOUNDRY_PROJECT_MANAGER,
     FOUNDRY_USER,
     MONITORING_READER,
@@ -495,7 +496,7 @@ def _unresolved_identity_role_mutations(
     planned = [
         (
             "project_system_identity",
-            FOUNDRY_USER,
+            COGNITIVE_SERVICES_OPENAI_USER,
             resources.foundry_account_resource_id,
         ),
         (
@@ -1398,6 +1399,7 @@ def cleanup(run_dir: Path, cli: AzureCli | None = None) -> dict[str, Any]:
             roles_by_id = {
                 role.definition_id.casefold(): role
                 for role in (
+                    COGNITIVE_SERVICES_OPENAI_USER,
                     FOUNDRY_USER,
                     FOUNDRY_PROJECT_MANAGER,
                     MONITORING_READER,

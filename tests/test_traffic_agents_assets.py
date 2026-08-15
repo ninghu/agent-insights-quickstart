@@ -91,12 +91,19 @@ def test_role_assignment_template_contains_expected_role_guids_and_scopes(assets
     for guid in (
         "53ca6127-db72-4b80-b1b0-d745d6d5456d",
         "eadc314b-1a2d-4efa-be10-5d325db5065e",
+        "5e0bd9bd-7b93-4f28-af87-19fc36ad61bd",
         "43d0d8ad-25c7-4714-9337-8ba259a9fe05",
         "dbc9c667-e97f-4491-aee6-90b9cf960190",
     ):
         assert guid in template
     for scope in ("scope: account", "scope: project", "scope: appInsights", "scope: logAnalytics"):
         assert scope in template
+    assert "projectManagedIdentityModelUser" in template
+    assert (
+        "roleDefinitionId: subscriptionResourceId("
+        "'Microsoft.Authorization/roleDefinitions', "
+        "cognitiveServicesOpenAIUserRoleGuid)"
+    ) in " ".join(template.split())
 
 
 def test_static_manifests_requirements_and_fixtures_are_consistent(assets_root) -> None:

@@ -79,7 +79,7 @@ def required_assignments(
         RequiredAssignment(
             project_principal_id,
             "ServicePrincipal",
-            FOUNDRY_USER,
+            COGNITIVE_SERVICES_OPENAI_USER,
             foundry_account_id,
         ),
         RequiredAssignment(
@@ -160,23 +160,9 @@ def missing_assignments(
     cli: AzureCli,
     required: Sequence[RequiredAssignment],
 ) -> list[RequiredAssignment]:
-    missing: list[RequiredAssignment] = []
-    for item in required:
-        assignments = list_assignments(cli, item)
-        if has_assignment(assignments, item):
-            continue
-        if (
-            item.principal_type == "ServicePrincipal"
-            and item.role == FOUNDRY_USER
-            and any(
-                role_guid(assignment.get("roleDefinitionId"))
-                == COGNITIVE_SERVICES_OPENAI_USER.definition_id.casefold()
-                for assignment in assignments
-            )
-        ):
-            continue
-        missing.append(item)
-    return missing
+    return [
+        item for item in required if not has_assignment(list_assignments(cli, item), item)
+    ]
 
 
 def create_assignment(cli: AzureCli, required: RequiredAssignment) -> Mapping[str, Any]:

@@ -21,12 +21,14 @@ from insights_onboarding.discovery import (
 )
 from insights_onboarding.errors import OnboardingError
 from insights_onboarding.permissions import (
+    COGNITIVE_SERVICES_OPENAI_USER,
     FOUNDRY_USER,
     RequiredAssignment,
     action_allowed,
     create_assignment,
     missing_assignments,
     require_actions,
+    required_assignments,
     role_guid,
 )
 
@@ -321,6 +323,30 @@ def test_permission_matching_and_assignment_identity(azure_ids: dict[str, str]) 
     assert excinfo.value.details["missing_actions"] == [
         "Microsoft.Authorization/roleAssignments/delete"
     ]
+
+
+def test_project_mi_uses_narrow_model_inference_role(
+    azure_ids: dict[str, str],
+) -> None:
+    assignments = required_assignments(
+        current_user_id="33333333-3333-3333-3333-333333333333",
+        project_principal_id="44444444-4444-4444-4444-444444444444",
+        foundry_account_id=azure_ids["account"],
+        project_id=azure_ids["project"],
+        application_insights_id=azure_ids["app_insights"],
+        workspace_id=azure_ids["workspace"],
+        agent_type="prompt",
+        protected_trace_content=False,
+    )
+    project_mi_account_roles = [
+        item.role
+        for item in assignments
+        if item.principal_type == "ServicePrincipal"
+        and item.scope == azure_ids["account"]
+    ]
+
+    assert project_mi_account_roles == [COGNITIVE_SERVICES_OPENAI_USER]
+    assert FOUNDRY_USER not in project_mi_account_roles
 
 
 def test_missing_assignments_uses_inherited_results_and_create_is_exact(

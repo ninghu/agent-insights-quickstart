@@ -43,7 +43,7 @@ Install the self-contained skill into an existing project, selecting your agent 
 
 ```shell
 gh skill install ninghu/agent-insights-quickstart \
-  agent-insights-onboarding@v0.1.5 \
+  agent-insights-onboarding@v0.1.6 \
   --allow-hidden-dirs \
   --agent AGENT_NAME
 ```
@@ -67,7 +67,8 @@ cost-bearing resources and prints an ownership-checked cleanup command.
 The workflow applies only missing assignments at exact resource scopes. It never grants
 Owner. Common assignments include:
 
-- Foundry User for the project managed identity on its parent Foundry account
+- Cognitive Services OpenAI User for the project managed identity on the native model
+  account
 - Monitoring Reader on the connected Application Insights component
 - Privileged Monitoring Data Reader on the linked Log Analytics workspace when trace
   content is protected
