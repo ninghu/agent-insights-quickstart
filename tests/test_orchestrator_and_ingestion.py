@@ -81,9 +81,7 @@ def test_build_plan_for_existing_covers_role_connection_and_monitor_paths(
         orchestrator,
         "plan_existing_connections",
         lambda *_args, **_kwargs: {
-            "account_connection_name": "agent-insights-test",
             "project_connection_name": "agent-insights-test",
-            "create_account_connection": True,
         },
     )
     monkeypatch.setattr(
@@ -139,9 +137,7 @@ def test_build_plan_adds_identity_mutation_when_project_has_no_principal(
         orchestrator,
         "plan_existing_connections",
         lambda *_args, **_kwargs: {
-            "account_connection_name": "agent-insights-test",
             "project_connection_name": "agent-insights-test",
-            "create_account_connection": True,
         },
     )
 
@@ -164,7 +160,7 @@ def test_build_plan_adds_identity_mutation_when_project_has_no_principal(
         "enable_project_system_identity",
         "create_app_insights_connections",
     ]
-    assert kinds.count("ensure_role_assignment_after_identity") == 6
+    assert kinds.count("ensure_role_assignment_after_identity") == 7
     assert kinds[-2:] == [
         "create_or_reuse_monitor",
         "create_or_reuse_agent_insights_result",

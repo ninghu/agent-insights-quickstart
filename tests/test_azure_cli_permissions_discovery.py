@@ -15,6 +15,9 @@ from insights_onboarding.discovery import (
     linked_workspace_id,
     list_app_insights_connections,
     list_application_insights,
+    list_model_deployments,
+    list_recommended_insight_models,
+    model_deployment_command,
     model_is_available,
     model_quota_available,
     parse_version,
@@ -347,6 +350,13 @@ def test_project_mi_uses_narrow_model_inference_role(
 
     assert project_mi_account_roles == [COGNITIVE_SERVICES_OPENAI_USER]
     assert FOUNDRY_USER not in project_mi_account_roles
+    project_mi_project_roles = [
+        item.role
+        for item in assignments
+        if item.principal_type == "ServicePrincipal"
+        and item.scope == azure_ids["project"]
+    ]
+    assert project_mi_project_roles == [FOUNDRY_USER]
 
 
 def test_missing_assignments_uses_inherited_results_and_create_is_exact(
@@ -504,6 +514,47 @@ def test_discovery_helpers_parse_versions_connections_and_models(
     )
 
 
+def test_model_catalog_rejects_deprecated_or_expired_models() -> None:
+    base_model = {
+        "name": "gpt-test",
+        "version": "1",
+        "format": "OpenAI",
+        "capabilities": {
+            "chatCompletion": "true",
+            "responses": "true",
+        },
+        "skus": [{"name": "GlobalStandard"}],
+    }
+    deprecated = {**base_model, "lifecycleStatus": "Deprecated"}
+    expired = {
+        **base_model,
+        "lifecycleStatus": "GenerallyAvailable",
+        "deprecation": {"inference": "2020-01-01T00:00:00Z"},
+    }
+    current = {
+        **base_model,
+        "lifecycleStatus": "GenerallyAvailable",
+        "deprecation": {"inference": "2099-01-01T00:00:00Z"},
+    }
+
+    for model, expected in (
+        (deprecated, False),
+        (expired, False),
+        (current, True),
+    ):
+        assert (
+            model_is_available(
+                StubCli(json_values=[[{"model": model}]]),
+                location="westus3",
+                model_name="gpt-test",
+                model_version="1",
+                model_format="OpenAI",
+                sku_name="GlobalStandard",
+            )
+            is expected
+        )
+
+
 def test_model_quota_requires_account_and_model_headroom() -> None:
     available = [
         {
@@ -542,3 +593,146 @@ def test_model_quota_requires_account_and_model_headroom() -> None:
         sku_name="GlobalStandard",
         capacity=1,
     )
+
+
+def test_recommended_models_prioritize_terra_and_exclude_legacy() -> None:
+    def model(
+        name: str,
+        version: str,
+        *,
+        lifecycle: str = "GenerallyAvailable",
+    ) -> dict[str, object]:
+        usage_name = f"OpenAI.GlobalStandard.{name}"
+        return {
+            "model": {
+                "name": name,
+                "version": version,
+                "format": "OpenAI",
+                "lifecycleStatus": lifecycle,
+                "capabilities": {
+                    "chatCompletion": "true",
+                    "responses": "true",
+                },
+                "skus": [
+                    {
+                        "name": "GlobalStandard",
+                        "usageName": usage_name,
+                    }
+                ],
+            }
+        }
+
+    catalog = [
+        model("gpt-4.1", "1"),
+        model("gpt-5.4", "1"),
+        model("gpt-5.6-terra", "2"),
+        model("gpt-5.5", "1", lifecycle="Deprecated"),
+    ]
+    usage = [
+        {
+            "name": {"value": "OpenAI.S0.AccountCount"},
+            "currentValue": 1,
+            "limit": 30,
+        },
+        {
+            "name": {"value": "OpenAI.GlobalStandard.gpt-5.4"},
+            "currentValue": 0,
+            "limit": 100,
+        },
+        {
+            "name": {"value": "OpenAI.GlobalStandard.gpt-5.6-terra"},
+            "currentValue": 10,
+            "limit": 100,
+        },
+    ]
+
+    result = list_recommended_insight_models(
+        StubCli(json_values=[catalog, usage]),
+        location="westus3",
+        minimum_capacity=10,
+    )
+
+    assert [item["name"] for item in result] == ["gpt-5.6-terra", "gpt-5.4"]
+    assert result[0]["quality_tier"] == "preferred_customer_candidate"
+    assert result[1]["quality_tier"] == "service_regression_baseline"
+
+    expired = catalog[2]
+    expired["model"]["deprecation"] = {"inference": "2020-01-01T00:00:00Z"}
+    assert list_recommended_insight_models(
+        StubCli(json_values=[[expired], usage]),
+        location="westus3",
+        minimum_capacity=10,
+    ) == []
+
+    exhausted_account = [
+        {
+            "name": {"value": "OpenAI.S0.AccountCount"},
+            "currentValue": 30,
+            "limit": 30,
+        },
+        *usage[1:],
+    ]
+    assert list_recommended_insight_models(
+        StubCli(json_values=[catalog[:2], exhausted_account]),
+        location="westus3",
+        minimum_capacity=10,
+    ) == []
+
+
+def test_deployment_discovery_and_command_are_project_scoped(
+    azure_ids: dict[str, str],
+) -> None:
+    deployments = list_model_deployments(
+        StubCli(
+            json_values=[
+                [
+                    {
+                        "name": "insights-terra",
+                        "properties": {
+                            "model": {
+                                "name": "gpt-5.6-terra",
+                                "version": "2",
+                                "format": "OpenAI",
+                            }
+                        },
+                        "sku": {"name": "GlobalStandard", "capacity": 10},
+                    },
+                    {
+                        "name": "legacy",
+                        "properties": {
+                            "model": {
+                                "name": "gpt-4.1",
+                                "version": "1",
+                                "format": "OpenAI",
+                            }
+                        },
+                        "sku": {"name": "GlobalStandard", "capacity": 10},
+                    },
+                ]
+            ]
+        ),
+        azure_ids["project"],
+    )
+    assert deployments[0]["deployment_name"] == "insights-terra"
+    assert deployments[0]["gpt5_plus"] is True
+    assert deployments[1]["gpt5_plus"] is False
+
+    command = model_deployment_command(
+        azure_ids["project"],
+        deployment_name="agent-insights-terra",
+        model_name="gpt-5.6-terra",
+        model_version="2",
+        model_format="OpenAI",
+        sku_name="GlobalStandard",
+        capacity=10,
+    )
+    assert command[:5] == [
+        "az",
+        "cognitiveservices",
+        "account",
+        "deployment",
+        "create",
+    ]
+    assert command[command.index("--name") + 1] == "demo-account"
+    assert command[command.index("--resource-group") + 1] == "rg-agent-insights"
+    assert command[-2:] == ["--sku-capacity", "10"]

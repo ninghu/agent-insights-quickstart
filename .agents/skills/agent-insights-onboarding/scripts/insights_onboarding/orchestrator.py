@@ -502,6 +502,11 @@ def _unresolved_identity_role_mutations(
         ),
         (
             "project_system_identity",
+            FOUNDRY_USER,
+            resources.project_resource_id,
+        ),
+        (
+            "project_system_identity",
             MONITORING_READER,
             resources.application_insights_resource_id,
         ),
@@ -1144,18 +1149,52 @@ def onboard(
         "created_connection_ids": list(connection_ids),
     }
     write_json_atomic(run_dir / "provisioning-receipt.json", provisioning_receipt)
-    if config.mode == "scratch":
-        outcomes = generate_sample_traffic(project, deployment)
-    elif config.invoke_existing_agent:
-        outcomes = generate_existing_traffic(project, deployment)
-    else:
-        outcomes = []
-    traffic_payload = {
-        "status": "generated" if outcomes else "using_existing",
+    traffic_payload: dict[str, Any] = {
+        "status": (
+            "generating"
+            if config.mode == "scratch" or config.invoke_existing_agent
+            else "using_existing"
+        ),
         "run_id": selected_run_id,
         "agent": asdict(deployment),
-        "outcomes": [asdict(item) for item in outcomes],
+        "outcomes": [],
     }
+    write_json_atomic(run_dir / "traffic-receipt.json", traffic_payload)
+
+    observed_outcomes: list[TrafficOutcome] = []
+
+    def record_outcome(outcome: TrafficOutcome) -> None:
+        observed_outcomes.append(outcome)
+        observed_outcomes.sort(key=lambda item: item.scenario)
+        traffic_payload["outcomes"] = [
+            asdict(item) for item in observed_outcomes
+        ]
+        write_json_atomic(run_dir / "traffic-receipt.json", traffic_payload)
+
+    try:
+        if config.mode == "scratch":
+            outcomes = generate_sample_traffic(
+                project,
+                deployment,
+                outcome_observer=record_outcome,
+            )
+        elif config.invoke_existing_agent:
+            outcomes = generate_existing_traffic(
+                project,
+                deployment,
+                outcome_observer=record_outcome,
+            )
+        else:
+            outcomes = []
+    except BaseException:
+        traffic_payload["status"] = "failed_partial"
+        traffic_payload["outcomes"] = [
+            asdict(item) for item in observed_outcomes
+        ]
+        write_json_atomic(run_dir / "traffic-receipt.json", traffic_payload)
+        raise
+    traffic_payload["status"] = "generated" if outcomes else "using_existing"
+    traffic_payload["outcomes"] = [asdict(item) for item in outcomes]
     write_json_atomic(run_dir / "traffic-receipt.json", traffic_payload)
     credential = _credential(live_context)
     if outcomes:
@@ -1166,7 +1205,7 @@ def onboard(
             deployment=deployment,
             outcomes=outcomes,
             timeout_seconds=ingestion_timeout_seconds,
-            require_tool=config.mode == "scratch",
+            require_tool=deployment.kind == "hosted",
         )
     else:
         ingestion_evidence = require_recent_agent_roots(
@@ -1235,6 +1274,16 @@ def status(
     )
     resources = ProjectResources(**provisioning["project"])
     deployment = AgentDeployment(**provisioning["agent"])
+    if traffic.get("status") in {"generating", "failed_partial"}:
+        raise OnboardingError(
+            "partial_traffic_not_resumable",
+            "This run generated only partial traffic and cannot be replayed. "
+            "Preserve the receipt for diagnosis, clean up the run, and start a new run.",
+            {
+                "observed_outcome_count": len(traffic.get("outcomes") or []),
+                "traffic_status": traffic.get("status"),
+            },
+        )
     outcomes = _traffic_from_receipt(traffic)
     credential = _credential(context)
     if "ingestion_evidence" not in traffic:
@@ -1246,7 +1295,7 @@ def status(
                 deployment=deployment,
                 outcomes=outcomes,
                 timeout_seconds=ingestion_timeout_seconds,
-                require_tool=config.mode == "scratch",
+                require_tool=deployment.kind == "hosted",
             )
         else:
             evidence = require_recent_agent_roots(

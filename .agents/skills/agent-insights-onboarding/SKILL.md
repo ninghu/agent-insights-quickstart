@@ -24,6 +24,7 @@ reference for the selected path:
 
 - [existing resources](references/existing-resources.md)
 - [scratch environment](references/scratch-environment.md)
+- [insight generation model](references/model-selection.md)
 
 ## Guided workflow
 
@@ -61,22 +62,31 @@ reference for the selected path:
    Pass `--enable-existing-monitor` only when the user selects yes. A new monitor uses a
    24-hour interval; an existing monitor keeps its current interval. If the monitor is
    already enabled, preserve it and report its next scheduled run.
-8. When creating a new project, ask the user to choose **Prompt Agent** or
+8. Select the insight generation model:
+   - For an existing project, run `discover deployments` and recommend a current GPT-5+
+     deployment.
+   - If none exists, or for a new project, run `discover models` for the selected region.
+     Prefer GPT-5.6 Terra when offered; otherwise use an available current GPT-5+ model.
+   - If deployment is required, show the returned exact command and ask the user to
+     confirm. Do not overwrite a different existing deployment. If the caller lacks
+     permission, hand the same command to an Azure administrator and verify afterward.
+   - Do not recommend GPT-4-class or older models for production insights.
+9. When creating a new project, ask the user to choose **Prompt Agent** or
    **Code-based Hosted Agent**, then show enabled subscriptions and ask them to select
    one.
-9. Gather only the choices needed by the selected path. Prefer CLI discovery over
+10. Gather only the choices needed by the selected path. Prefer CLI discovery over
    asking the user to paste resource IDs.
-10. From the user's current repository root, run the read-only doctor first:
+11. From the user's current repository root, run the read-only doctor first:
 
    ```text
    python "<skill-root>/scripts/agent_insights_onboard.py" doctor <arguments>
    ```
 
-11. Show the doctor's non-secret context and exact missing prerequisites. Stop before
+12. Show the doctor's non-secret context and exact missing prerequisites. Stop before
    mutation if the subscription is not Agent Insights-enabled, the cloud is not
    `AzureCloud`, permissions are insufficient, the model lacks quota, or resources are
    ambiguous.
-12. If doctor returns `insufficient_preflight_permission` with `admin_handoff`, show the
+13. If doctor returns `insufficient_preflight_permission` with `admin_handoff`, show the
    exact principal, role, scope, and command list. Ask:
    **Has an Azure administrator completed this RBAC handoff?**
    - **Yes, recheck access**
@@ -84,7 +94,7 @@ reference for the selected path:
 
    On yes, rerun the same doctor command and require `status: ready`. Never enable
    scheduling based only on the user's confirmation.
-13. When doctor returns `ready`, run:
+14. When doctor returns `ready`, run:
 
    ```text
    python "<skill-root>/scripts/agent_insights_onboard.py" onboard <same arguments>
@@ -92,9 +102,9 @@ reference for the selected path:
 
    The CLI freezes and prints a plan, then automatically applies it. Do not insert a
    second approval prompt for the planned RBAC writes.
-14. Report progress from the CLI's JSON events without exposing subprocess output that
+15. Report progress from the CLI's JSON events without exposing subprocess output that
    the CLI redacted.
-15. Require a final receipt with `status: complete`. Give the user the Foundry portal
+16. Require a final receipt with `status: complete`. Give the user the Foundry portal
     link, first-result insight count, agent/version, monitor/run/insight IDs, cost
     estimate when returned by the service, schedule interval/next run when enabled,
     receipt path, and cleanup command. End with this concise handoff:

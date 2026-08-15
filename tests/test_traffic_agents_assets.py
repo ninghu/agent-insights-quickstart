@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import json
 import zipfile
+from types import SimpleNamespace
 
 import pytest
 from insights_onboarding import agents, traffic
 from insights_onboarding.errors import OnboardingError
+from insights_onboarding.models import AgentDeployment
 
 
 def test_traffic_fixtures_have_expected_bounds_for_prompt_and_hosted() -> None:
@@ -51,6 +53,56 @@ def test_prompt_tool_outputs_are_deterministic_for_healthy_and_faulty_scenarios(
     with pytest.raises(OnboardingError) as bad_args:
         traffic._tool_output(healthy, "lookup_order", "{")
     assert bad_args.value.code == "invalid_tool_arguments"
+
+
+def test_prompt_function_continuation_stores_responses() -> None:
+    scenario = next(
+        item for item in traffic._load_scenarios("prompt") if not item["expected_fault"]
+    )
+
+    class FakeResponses:
+        def __init__(self) -> None:
+            self.calls: list[dict[str, object]] = []
+
+        def create(self, **kwargs):
+            self.calls.append(kwargs)
+            if len(self.calls) == 1:
+                return SimpleNamespace(
+                    id="response-one",
+                    status="completed",
+                    output=[
+                        SimpleNamespace(
+                            type="function_call",
+                            call_id="call-one",
+                            name="lookup_order",
+                            arguments=json.dumps(
+                                scenario["expected_tool_arguments"]
+                            ),
+                        )
+                    ],
+                )
+            return SimpleNamespace(
+                id="response-two",
+                status="completed",
+                output=[],
+            )
+
+    responses = FakeResponses()
+    client = SimpleNamespace(responses=responses)
+    response_id, session_id = traffic._invoke_prompt(
+        client,
+        AgentDeployment(
+            name="sample-agent",
+            version="1",
+            kind="prompt",
+        ),
+        scenario,
+    )
+
+    assert response_id == "response-two"
+    assert session_id is None
+    assert len(responses.calls) == 2
+    assert all(call["store"] is True for call in responses.calls)
 
 
 def test_hosted_zip_content_and_hash_are_deterministic(tmp_path, assets_root) -> None:
@@ -99,11 +151,20 @@ def test_role_assignment_template_contains_expected_role_guids_and_scopes(assets
     for scope in ("scope: account", "scope: project", "scope: appInsights", "scope: logAnalytics"):
         assert scope in template
     assert "projectManagedIdentityModelUser" in template
+    assert "projectManagedIdentityFoundryUser" in template
     assert (
         "roleDefinitionId: subscriptionResourceId("
         "'Microsoft.Authorization/roleDefinitions', "
         "cognitiveServicesOpenAIUserRoleGuid)"
     ) in " ".join(template.split())
+
+
+def test_scratch_template_defaults_to_gpt5_capacity(assets_root) -> None:
+    template = (assets_root / "infra" / "main.bicep").read_text(encoding="utf-8")
+
+    assert "param modelName string = 'gpt-5.4'" in template
+    assert "param modelSkuCapacity int = 30" in template
+    assert "gpt-4.1-mini" not in template
 
 
 def test_static_manifests_requirements_and_fixtures_are_consistent(assets_root) -> None:
@@ -120,6 +181,7 @@ def test_static_manifests_requirements_and_fixtures_are_consistent(assets_root) 
     ).read_text(encoding="utf-8")
 
     assert "azure-ai-agentserver-responses==2.0.0b0" in requirements
+    assert "opentelemetry-api" not in requirements
     assert hosted_manifest["runtime"] == root_manifest["agents"]["hosted_agent"]["runtime"]
     assert hosted_manifest["entry_point"] == root_manifest["agents"]["hosted_agent"]["entry_point"]
     assert hosted_manifest["protocol"] == root_manifest["agents"]["hosted_agent"]["protocol"]
@@ -174,6 +236,8 @@ def test_skill_asks_project_choice_before_azure_details(repo_root) -> None:
     )
     assert "Insights generated: <insight_count>" in skill
     assert "Review details: <agent_insights_portal_url>" in skill
+    assert "Do not recommend GPT-4-class or older models" in skill
+    assert "Prefer GPT-5.6 Terra when offered" in skill
 
 
 def test_readme_has_one_clone_and_ask_entry_path(repo_root) -> None:

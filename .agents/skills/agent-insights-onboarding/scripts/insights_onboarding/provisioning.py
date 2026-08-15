@@ -32,7 +32,7 @@ _EXISTING_CONNECTIONS_BICEP = (
 
 def resource_group_name(config: OnboardingConfig, run_id: str) -> str:
     prefix = normalize_name(config.name_prefix, max_length=32)
-    return f"rg-{prefix}-{run_id[:8]}"
+    return f"rg-{prefix}-{run_id}"
 
 
 def _tags(run_id: str, context: AzureContext) -> dict[str, str]:
@@ -156,7 +156,7 @@ def provision_scratch(
             str(_MAIN_BICEP),
             "--parameters",
             f"namePrefix={name_prefix}",
-            f"nameSuffix={run_id[:8]}",
+            f"nameSuffix={run_id}",
             f"location={config.location}",
             f"initiatingUserObjectId={context.user_object_id}",
             f"agentType={config.agent_type}",
@@ -371,8 +371,6 @@ def ensure_existing_connections(
         "Microsoft.Insights/components",
     )
     account_name, project_name = project.names
-    connection_name = str(connection_plan["account_connection_name"])
-    create_account_connection = bool(connection_plan["create_account_connection"])
     deployment = cli.json(
         [
             "deployment",
@@ -391,20 +389,17 @@ def ensure_existing_connections(
             f"applicationInsightsSubscriptionId={app_insights.subscription_id}",
             f"applicationInsightsResourceGroup={app_insights.resource_group}",
             f"applicationInsightsName={app_insights.name}",
-            f"accountConnectionName={connection_name}",
             f"projectConnectionName={connection_plan['project_connection_name']}",
-            f"createAccountConnection={str(create_account_connection).lower()}",
         ],
         timeout=900,
     )
     outputs = _deployment_outputs(deployment)
     ids = tuple(
         str(outputs[name])
-        for name in ("createdAccountConnectionId", "projectConnectionId")
+        for name in ("projectConnectionId",)
         if outputs.get(name)
     )
-    expected_count = 2 if create_account_connection else 1
-    if len(ids) != expected_count:
+    if len(ids) != 1:
         raise OnboardingError(
             "connection_create_failed",
             "Application Insights connection deployment returned incomplete outputs.",
@@ -418,7 +413,7 @@ def plan_existing_connections(
     project_resource_id: str,
     application_insights_resource_id: str,
 ) -> dict[str, str | bool]:
-    project = require_resource_type(
+    require_resource_type(
         project_resource_id,
         "Microsoft.CognitiveServices/accounts/projects",
     )
@@ -426,36 +421,9 @@ def plan_existing_connections(
         application_insights_resource_id,
         "Microsoft.Insights/components",
     )
-    account_connections = list_connections(cli, project.parent().raw)
-    matching_account_connections = [
-        item
-        for item in account_connections
-        if item["category"].casefold() == "appinsights"
-        and item["resource_id"].rstrip("/").casefold()
-        == app_insights.raw.casefold()
-    ]
-    if len(matching_account_connections) > 1:
-        raise OnboardingError(
-            "ambiguous_account_app_insights_connection",
-            "The Foundry account has multiple connections to the selected Application Insights.",
-        )
-    create_account_connection = not matching_account_connections
-    connection_name = (
-        matching_account_connections[0]["name"]
-        if matching_account_connections
-        else "agent-insights-"
-        + hashlib.sha256(app_insights.raw.casefold().encode()).hexdigest()[:10]
-    )
-    for item in account_connections:
-        if item["name"].casefold() == connection_name.casefold() and (
-            item["category"].casefold() != "appinsights"
-            or item["resource_id"].rstrip("/").casefold()
-            != app_insights.raw.casefold()
-        ):
-            raise OnboardingError(
-                "account_connection_name_conflict",
-                "The deterministic account connection name is already used by another target.",
-            )
+    connection_name = "agent-insights-" + hashlib.sha256(
+        app_insights.raw.casefold().encode()
+    ).hexdigest()[:10]
     for item in list_connections(cli, project_resource_id):
         if item["name"].casefold() == connection_name.casefold():
             raise OnboardingError(
@@ -463,9 +431,7 @@ def plan_existing_connections(
                 "The project connection name is already used by another connection.",
             )
     return {
-        "account_connection_name": connection_name,
         "project_connection_name": connection_name,
-        "create_account_connection": create_account_connection,
     }
 
 

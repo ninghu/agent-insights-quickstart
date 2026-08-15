@@ -15,13 +15,17 @@ from .discovery import (
     find_project_by_endpoint,
     list_app_insights_connections,
     list_application_insights,
+    list_model_deployments,
     list_projects,
+    list_recommended_insight_models,
     list_subscriptions,
+    model_deployment_command,
     select_context,
 )
 from .errors import OnboardingError
 from .models import OnboardingConfig
 from .orchestrator import cleanup, doctor, onboard, status
+from .validation import normalize_name
 
 
 def _emit(value: Any) -> None:
@@ -39,11 +43,11 @@ def _add_configuration(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--application-insights-resource-id")
     parser.add_argument("--agent-name")
     parser.add_argument("--model-deployment-name")
-    parser.add_argument("--model-name", default="gpt-4.1-mini")
-    parser.add_argument("--model-version", default="2025-04-14")
+    parser.add_argument("--model-name", default="gpt-5.4")
+    parser.add_argument("--model-version", default="2026-03-05")
     parser.add_argument("--model-format", default="OpenAI")
     parser.add_argument("--model-sku", default="GlobalStandard")
-    parser.add_argument("--model-capacity", type=int, default=1)
+    parser.add_argument("--model-capacity", type=int, default=30)
     parser.add_argument("--lookback-hours", type=int, default=168)
     parser.add_argument("--invoke-existing-agent", action="store_true")
     parser.add_argument("--enable-existing-monitor", action="store_true")
@@ -187,6 +191,51 @@ def _discover(args: argparse.Namespace) -> int:
             }
         )
         return 0
+    if args.kind == "deployments":
+        if not args.project_resource_id:
+            raise OnboardingError(
+                "missing_project_resource_id",
+                "Deployment discovery requires --project-resource-id.",
+            )
+        _emit(
+            {
+                "status": "complete",
+                "deployments": list_model_deployments(
+                    cli,
+                    args.project_resource_id,
+                ),
+            }
+        )
+        return 0
+    if args.kind == "models":
+        if not args.location:
+            raise OnboardingError(
+                "missing_location",
+                "Model discovery requires --location.",
+            )
+        models = list_recommended_insight_models(
+            cli,
+            location=args.location,
+            minimum_capacity=args.minimum_capacity,
+        )
+        if args.project_resource_id:
+            for model in models:
+                deployment_name = normalize_name(
+                    f"agent-insights-{model['name']}",
+                    max_length=64,
+                )
+                model["suggested_deployment_name"] = deployment_name
+                model["deployment_command"] = model_deployment_command(
+                    args.project_resource_id,
+                    deployment_name=deployment_name,
+                    model_name=str(model["name"]),
+                    model_version=str(model["version"]),
+                    model_format=str(model["format"]),
+                    sku_name=str(model["sku_name"]),
+                    capacity=int(model["recommended_capacity"]),
+                )
+        _emit({"status": "complete", "recommended_models": models})
+        return 0
     if args.kind == "app-insights":
         _emit(
             {
@@ -263,6 +312,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "projects",
             "connections",
             "app-insights",
+            "deployments",
+            "models",
             "agents",
         ),
     )
@@ -270,6 +321,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     discover_parser.add_argument("--project-endpoint")
     discover_parser.add_argument("--project-resource-id")
     discover_parser.add_argument("--resource-group")
+    discover_parser.add_argument("--location")
+    discover_parser.add_argument("--minimum-capacity", type=int, default=30)
     discover_parser.set_defaults(handler=_discover)
 
     doctor_parser = subparsers.add_parser(

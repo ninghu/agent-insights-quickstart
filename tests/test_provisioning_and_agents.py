@@ -22,7 +22,7 @@ class ScratchCli:
             return {
                 "id": (
                     "/subscriptions/11111111-1111-1111-1111-111111111111"
-                    "/resourceGroups/rg-agent-insights-abc123de"
+                    "/resourceGroups/rg-agent-insights-abc123def456"
                 ),
                 "tags": {
                     "created-by": "agent-insights-quickstart",
@@ -43,10 +43,6 @@ class ScratchCli:
             return {
                 "properties": {
                     "outputs": {
-                        "createdAccountConnectionId": {
-                            "type": "string",
-                            "value": "account-connection",
-                        },
                         "projectConnectionId": {
                             "type": "string",
                             "value": "project-connection",
@@ -117,7 +113,9 @@ def test_provision_scratch_maps_nonsecret_outputs(
     assert actual.project_resource_id == expected.project_resource_id
     assert actual.project_endpoint == expected.project_endpoint
     assert actual.resource_group_id is not None
-    assert actual.resource_group_id.endswith("/resourceGroups/rg-agent-insights-abc123de")
+    assert actual.resource_group_id.endswith(
+        "/resourceGroups/rg-agent-insights-abc123def456"
+    )
     deployment_call = next(
         call for call in cli.calls if call[:3] == ["deployment", "group", "create"]
     )
@@ -170,9 +168,7 @@ def test_existing_identity_and_connection_creation(
         provisioning,
         "plan_existing_connections",
         lambda *_args, **_kwargs: {
-            "account_connection_name": "agent-insights-test",
             "project_connection_name": "agent-insights-test",
-            "create_account_connection": True,
         },
     )
     resources = make_resources()
@@ -183,7 +179,7 @@ def test_existing_identity_and_connection_creation(
         location="westus3",
         run_id=run_id,
     )
-    assert connection_ids == ("account-connection", "project-connection")
+    assert connection_ids == ("project-connection",)
 
 
 def test_existing_connection_creation_reuses_current_connection(
@@ -210,28 +206,11 @@ def test_existing_connection_creation_reuses_current_connection(
     )
 
 
-def test_connection_plan_reuses_equivalent_account_connection(
+def test_connection_plan_creates_one_project_scoped_connection(
     make_resources,
 ) -> None:
     resources = make_resources()
-    account_connection_id = (
-        f"{resources.foundry_account_resource_id}/connections/shared-monitoring"
-    )
-    cli = ConnectionCli(
-        [
-            {
-                "value": [
-                    _connection(
-                        connection_id=account_connection_id,
-                        name="demo-account/shared-monitoring",
-                        category="AppInsights",
-                        resource_id=resources.application_insights_resource_id,
-                    )
-                ]
-            },
-            {"value": []},
-        ]
-    )
+    cli = ConnectionCli([{"value": []}])
 
     plan = provisioning.plan_existing_connections(
         cli,
@@ -239,25 +218,22 @@ def test_connection_plan_reuses_equivalent_account_connection(
         application_insights_resource_id=resources.application_insights_resource_id,
     )
 
-    assert plan == {
-        "account_connection_name": "shared-monitoring",
-        "project_connection_name": "shared-monitoring",
-        "create_account_connection": False,
-    }
+    assert set(plan) == {"project_connection_name"}
+    assert str(plan["project_connection_name"]).startswith("agent-insights-")
 
 
-def test_connection_plan_rejects_deterministic_name_collision(
+def test_connection_plan_rejects_project_name_collision(
     make_resources,
 ) -> None:
     resources = make_resources()
     empty_plan = provisioning.plan_existing_connections(
-        ConnectionCli([{"value": []}, {"value": []}]),
+        ConnectionCli([{"value": []}]),
         project_resource_id=resources.project_resource_id,
         application_insights_resource_id=resources.application_insights_resource_id,
     )
-    connection_name = str(empty_plan["account_connection_name"])
+    connection_name = str(empty_plan["project_connection_name"])
     conflicting_id = (
-        f"{resources.foundry_account_resource_id}/connections/{connection_name}"
+        f"{resources.project_resource_id}/connections/{connection_name}"
     )
     cli = ConnectionCli(
         [
@@ -281,7 +257,7 @@ def test_connection_plan_rejects_deterministic_name_collision(
             application_insights_resource_id=
                 resources.application_insights_resource_id,
         )
-    assert excinfo.value.code == "account_connection_name_conflict"
+    assert excinfo.value.code == "project_connection_name_conflict"
 
 
 class FakeAgentOperations:
@@ -336,6 +312,10 @@ def test_create_prompt_and_hosted_sample_agents(
     code = hosted_operations.created[0]["code"]
     assert code[0] == "hosted-agent.zip"
     assert code[2] == "application/zip"
+
+
+def test_agent_name_uses_full_run_identity(run_id) -> None:
+    assert agents.agent_name(run_id, "prompt") == "insights-prompt-abc123def456"
 
 
 def test_create_sample_agent_reuses_only_exact_owned_version(run_id) -> None:

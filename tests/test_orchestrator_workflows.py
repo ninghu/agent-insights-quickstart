@@ -241,7 +241,7 @@ def test_onboard_scratch_writes_resumable_receipts(
     monkeypatch.setattr(
         orchestrator,
         "generate_sample_traffic",
-        lambda *_args: outcomes,
+        lambda *_args, **_kwargs: outcomes,
     )
     monkeypatch.setattr(orchestrator, "_credential", lambda _context: object())
     monkeypatch.setattr(
@@ -281,6 +281,69 @@ def test_onboard_scratch_writes_resumable_receipts(
     assert persisted_final["status"] == final["status"]
     assert persisted_final["monitor"]["insight_ids"] == ["insight-1"]
     assert persisted_final["result_summary"]["insight_count"] == 1
+
+    with pytest.raises(orchestrator.OnboardingError) as replay:
+        orchestrator.onboard(config, run_id=run_id, cli=object())
+    assert replay.value.code == "traffic_already_generated"
+
+
+def test_partial_traffic_is_journaled_and_never_replayed(
+    monkeypatch,
+    tmp_path,
+    make_config,
+    make_resources,
+    make_deployment,
+    azure_context,
+    run_id,
+) -> None:
+    config = make_config()
+    resources = make_resources()
+    deployment = make_deployment(name="insights-prompt-abc123de", version="1")
+    partial = TrafficOutcome(
+        scenario="healthy-001",
+        expected_fault=False,
+        response_id="resp-1",
+        session_id=None,
+        trace_id=None,
+        started_at="2026-01-01T00:00:00+00:00",
+        completed_at="2026-01-01T00:00:01+00:00",
+    )
+    monkeypatch.setattr(orchestrator, "_RUNS_ROOT", tmp_path)
+    monkeypatch.setattr(orchestrator, "doctor", lambda *_args, **_kwargs: {"status": "ready"})
+    monkeypatch.setattr(
+        orchestrator,
+        "select_context",
+        lambda _cli, _subscription_id: azure_context,
+    )
+    monkeypatch.setattr(
+        orchestrator,
+        "provision_scratch",
+        lambda *_args, **_kwargs: resources,
+    )
+    monkeypatch.setattr(orchestrator, "_ensure_roles", lambda *_args, **_kwargs: ())
+    monkeypatch.setattr(orchestrator, "_wait_for_authorization", lambda **_kwargs: None)
+    monkeypatch.setattr(orchestrator, "project_client", lambda *_args: object())
+    monkeypatch.setattr(
+        orchestrator,
+        "create_sample_agent",
+        lambda *_args, **_kwargs: deployment,
+    )
+
+    def fail_after_one(*_args, outcome_observer, **_kwargs):
+        outcome_observer(partial)
+        raise orchestrator.OnboardingError(
+            "agent_invocation_failed",
+            "The bounded invocation failed.",
+        )
+
+    monkeypatch.setattr(orchestrator, "generate_sample_traffic", fail_after_one)
+
+    with pytest.raises(orchestrator.OnboardingError) as failed:
+        orchestrator.onboard(config, run_id=run_id, cli=object())
+    assert failed.value.code == "agent_invocation_failed"
+    traffic = read_json(tmp_path / run_id / "traffic-receipt.json")
+    assert traffic["status"] == "failed_partial"
+    assert len(traffic["outcomes"]) == 1
 
     with pytest.raises(orchestrator.OnboardingError) as replay:
         orchestrator.onboard(config, run_id=run_id, cli=object())

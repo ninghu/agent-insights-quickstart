@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Mapping, Sequence
+from datetime import UTC, datetime
 from typing import Any
 from urllib.parse import quote, unquote, urlparse
 
@@ -453,7 +454,33 @@ def model_is_available(
         model = item.get("model")
         if not isinstance(model, Mapping):
             model = item
-        skus = item.get("skus")
+        lifecycle = str(model.get("lifecycleStatus") or "").casefold()
+        if lifecycle in {"deprecated", "retired"}:
+            continue
+        deprecation = model.get("deprecation")
+        inference_end = (
+            str(deprecation.get("inference") or "")
+            if isinstance(deprecation, Mapping)
+            else ""
+        )
+        if inference_end:
+            try:
+                if datetime.fromisoformat(
+                    inference_end.replace("Z", "+00:00")
+                ) <= datetime.now(UTC):
+                    continue
+            except ValueError as error:
+                raise OnboardingError(
+                    "invalid_model_catalog",
+                    "Model deprecation metadata contained an invalid timestamp.",
+                ) from error
+        capabilities = model.get("capabilities")
+        if isinstance(capabilities, Mapping) and not (
+            str(capabilities.get("chatCompletion") or "").casefold() == "true"
+            and str(capabilities.get("responses") or "").casefold() == "true"
+        ):
+            continue
+        skus = model.get("skus") or item.get("skus")
         sku_names = {
             str(sku.get("name") or "").casefold()
             for sku in skus or []
@@ -524,3 +551,224 @@ def model_quota_available(
         and model_quota_found
         and model_quota_available
     )
+
+
+def list_recommended_insight_models(
+    cli: AzureCli,
+    *,
+    location: str,
+    minimum_capacity: int = 30,
+) -> list[dict[str, Any]]:
+    catalog = cli.json(["cognitiveservices", "model", "list", "--location", location])
+    usage = cli.json(["cognitiveservices", "usage", "list", "--location", location])
+    if not isinstance(catalog, list) or not isinstance(usage, list):
+        raise OnboardingError(
+            "invalid_model_catalog",
+            "Azure CLI returned invalid model or quota data.",
+        )
+    headroom: dict[str, float] = {}
+    for item in usage:
+        if not isinstance(item, Mapping):
+            continue
+        name = item.get("name")
+        usage_name = (
+            str(name.get("value") or "") if isinstance(name, Mapping) else ""
+        )
+        try:
+            headroom[usage_name] = float(item.get("limit") or 0) - float(
+                item.get("currentValue") or 0
+            )
+        except (TypeError, ValueError) as error:
+            raise OnboardingError(
+                "invalid_quota_catalog",
+                "Azure quota entry contained a nonnumeric limit.",
+            ) from error
+    if headroom.get("OpenAI.S0.AccountCount", 0) < 1:
+        return []
+
+    candidates: dict[tuple[str, str], dict[str, Any]] = {}
+    for item in catalog:
+        if not isinstance(item, Mapping):
+            continue
+        model = item.get("model")
+        if not isinstance(model, Mapping):
+            continue
+        name = str(model.get("name") or "")
+        version = str(model.get("version") or "")
+        if not name.casefold().startswith("gpt-5") or not version:
+            continue
+        if str(model.get("lifecycleStatus") or "").casefold() in {
+            "deprecated",
+            "retired",
+        }:
+            continue
+        deprecation = model.get("deprecation")
+        inference_end = (
+            str(deprecation.get("inference") or "")
+            if isinstance(deprecation, Mapping)
+            else ""
+        )
+        if inference_end:
+            try:
+                if datetime.fromisoformat(
+                    inference_end.replace("Z", "+00:00")
+                ) <= datetime.now(UTC):
+                    continue
+            except ValueError as error:
+                raise OnboardingError(
+                    "invalid_model_catalog",
+                    "Model deprecation metadata contained an invalid timestamp.",
+                ) from error
+        capabilities = model.get("capabilities")
+        if not isinstance(capabilities, Mapping) or not (
+            str(capabilities.get("chatCompletion") or "").casefold() == "true"
+            and str(capabilities.get("responses") or "").casefold() == "true"
+        ):
+            continue
+        for sku in model.get("skus") or []:
+            if (
+                not isinstance(sku, Mapping)
+                or str(sku.get("name") or "").casefold() != "globalstandard"
+            ):
+                continue
+            usage_name = str(sku.get("usageName") or "")
+            available = headroom.get(usage_name, 0)
+            if available < minimum_capacity:
+                continue
+            quality_tier = (
+                "preferred_customer_candidate"
+                if name.casefold() == "gpt-5.6-terra"
+                else "service_regression_baseline"
+                if name.casefold() == "gpt-5.4"
+                else "gpt5_plus_candidate"
+            )
+            priority = (
+                0
+                if quality_tier == "preferred_customer_candidate"
+                else 1
+                if quality_tier == "service_regression_baseline"
+                else 2
+            )
+            candidates[(name.casefold(), version.casefold())] = {
+                "name": name,
+                "version": version,
+                "format": str(model.get("format") or "OpenAI"),
+                "sku_name": str(sku.get("name") or ""),
+                "recommended_capacity": minimum_capacity,
+                "quota_headroom": available,
+                "lifecycle_status": str(model.get("lifecycleStatus") or ""),
+                "quality_tier": quality_tier,
+                "_priority": priority,
+            }
+    result = sorted(
+        candidates.values(),
+        key=lambda item: (
+            int(item["_priority"]),
+            str(item["name"]).casefold(),
+            str(item["version"]).casefold(),
+        ),
+    )
+    for item in result:
+        item.pop("_priority", None)
+    return result
+
+
+def list_model_deployments(
+    cli: AzureCli,
+    project_resource_id: str,
+) -> list[dict[str, Any]]:
+    project = require_resource_type(
+        project_resource_id,
+        "Microsoft.CognitiveServices/accounts/projects",
+    )
+    account = project.parent()
+    value = cli.json(
+        [
+            "cognitiveservices",
+            "account",
+            "deployment",
+            "list",
+            "--resource-group",
+            account.resource_group,
+            "--name",
+            account.name,
+        ]
+    )
+    if not isinstance(value, list):
+        raise OnboardingError(
+            "invalid_deployment_list",
+            "Azure CLI returned an invalid model deployment list.",
+        )
+    deployments: list[dict[str, Any]] = []
+    for item in value:
+        if not isinstance(item, Mapping):
+            continue
+        properties = item.get("properties")
+        model = properties.get("model") if isinstance(properties, Mapping) else None
+        sku = item.get("sku")
+        if not isinstance(model, Mapping):
+            continue
+        model_name = str(model.get("name") or "")
+        deployments.append(
+            {
+                "deployment_name": str(item.get("name") or ""),
+                "model_name": model_name,
+                "model_version": str(model.get("version") or ""),
+                "model_format": str(model.get("format") or ""),
+                "sku_name": (
+                    str(sku.get("name") or "") if isinstance(sku, Mapping) else ""
+                ),
+                "capacity": (
+                    int(sku.get("capacity") or 0) if isinstance(sku, Mapping) else 0
+                ),
+                "gpt5_plus": model_name.casefold().startswith("gpt-5"),
+            }
+        )
+    return sorted(
+        deployments,
+        key=lambda item: (
+            not bool(item["gpt5_plus"]),
+            str(item["deployment_name"]).casefold(),
+        ),
+    )
+
+
+def model_deployment_command(
+    project_resource_id: str,
+    *,
+    deployment_name: str,
+    model_name: str,
+    model_version: str,
+    model_format: str,
+    sku_name: str,
+    capacity: int,
+) -> list[str]:
+    account = require_resource_type(
+        project_resource_id,
+        "Microsoft.CognitiveServices/accounts/projects",
+    ).parent()
+    return [
+        "az",
+        "cognitiveservices",
+        "account",
+        "deployment",
+        "create",
+        "--subscription",
+        account.subscription_id,
+        "--resource-group",
+        account.resource_group,
+        "--name",
+        account.name,
+        "--deployment-name",
+        deployment_name,
+        "--model-name",
+        model_name,
+        "--model-version",
+        model_version,
+        "--model-format",
+        model_format,
+        "--sku-name",
+        sku_name,
+        "--sku-capacity",
+        str(capacity),
+    ]

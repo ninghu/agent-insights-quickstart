@@ -24,23 +24,23 @@ param initiatingUserObjectId string
 param agentType string = 'prompt'
 
 @description('Model name for the single deployment created on the Foundry account.')
-param modelName string = 'gpt-4.1-mini'
+param modelName string = 'gpt-5.4'
 
 @description('Model version for the single deployment created on the Foundry account.')
-param modelVersion string = '2025-04-14'
+param modelVersion string = '2026-03-05'
 
 @description('Model format for the single deployment created on the Foundry account.')
 param modelFormat string = 'OpenAI'
 
 @description('Deployment name for the model deployment.')
-param modelDeploymentName string = 'gpt-4-1-mini'
+param modelDeploymentName string = 'gpt-5-4'
 
 @description('SKU name for the model deployment.')
 param modelSkuName string = 'GlobalStandard'
 
 @description('Capacity for the model deployment SKU.')
 @minValue(1)
-param modelSkuCapacity int = 1
+param modelSkuCapacity int = 30
 
 @description('When true, grants Privileged Monitoring Data Reader on the Log Analytics workspace to the project identity and current user.')
 param grantPrivilegedMonitoringDataReader bool = true
@@ -56,15 +56,16 @@ var prefixToken = toLower(replace(replace(namePrefix, '-', ''), '_', ''))
 var suffixToken = toLower(replace(replace(nameSuffix, '-', ''), '_', ''))
 var labelPrefix = toLower(replace(namePrefix, '_', '-'))
 var labelSuffix = toLower(replace(nameSuffix, '_', '-'))
-var baseToken = take('${prefixToken}${suffixToken}', 20)
+// Keep the full run suffix so a soft-deleted Foundry account from an earlier run never
+// collides with a later run that happens to share the same prefix.
+var baseToken = '${take(prefixToken, 8)}${suffixToken}'
 var baseLabel = take('${labelPrefix}-${labelSuffix}', 48)
 
 var foundryAccountName = take('ai${baseToken}', 24)
 var foundryProjectName = take('proj-${baseLabel}', 64)
 var appInsightsName = take('appi-${baseLabel}', 260)
 var logAnalyticsName = take('log-${baseLabel}', 63)
-var accountConnectionName = 'appinsights-account'
-var projectConnectionName = 'appinsights-project'
+var projectConnectionName = 'appinsights'
 
 var effectiveTags = union(tags, {
   'created-by': contains(tags, 'created-by') ? string(tags['created-by']) : 'azure-cli'
@@ -103,7 +104,6 @@ module foundry 'modules/foundry.bicep' = {
 module connections 'modules/connections.bicep' = {
   name: 'connections'
   params: {
-    accountConnectionName: accountConnectionName
     accountName: foundry.outputs.accountName
     appInsightsName: monitoring.outputs.appInsightsName
     projectConnectionName: projectConnectionName
@@ -135,8 +135,6 @@ output logAnalyticsWorkspaceId string = monitoring.outputs.logAnalyticsId
 output logAnalyticsWorkspaceName string = monitoring.outputs.logAnalyticsName
 output applicationInsightsId string = monitoring.outputs.appInsightsId
 output applicationInsightsName string = monitoring.outputs.appInsightsName
-output accountAppInsightsConnectionId string = connections.outputs.accountConnectionId
-output accountAppInsightsConnectionName string = connections.outputs.accountConnectionName
 output projectAppInsightsConnectionId string = connections.outputs.projectConnectionId
 output projectAppInsightsConnectionName string = connections.outputs.projectConnectionName
 output modelDeploymentId string = foundry.outputs.modelDeploymentId

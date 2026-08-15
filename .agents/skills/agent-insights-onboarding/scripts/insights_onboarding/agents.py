@@ -38,7 +38,7 @@ def project_client(endpoint: str, tenant_id: str) -> Any:
 
 
 def agent_name(run_id: str, agent_type: AgentType) -> str:
-    return normalize_name(f"insights-{agent_type}-{run_id[:8]}", max_length=48)
+    return normalize_name(f"insights-{agent_type}-{run_id}", max_length=48)
 
 
 def _metadata(run_id: str) -> dict[str, str]:

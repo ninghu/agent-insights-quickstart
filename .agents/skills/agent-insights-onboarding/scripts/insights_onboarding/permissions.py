@@ -85,6 +85,12 @@ def required_assignments(
         RequiredAssignment(
             project_principal_id,
             "ServicePrincipal",
+            FOUNDRY_USER,
+            project_id,
+        ),
+        RequiredAssignment(
+            project_principal_id,
+            "ServicePrincipal",
             MONITORING_READER,
             application_insights_id,
         ),

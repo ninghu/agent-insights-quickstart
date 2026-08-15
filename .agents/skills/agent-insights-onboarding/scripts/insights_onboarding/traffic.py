@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import concurrent.futures
 import json
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -110,6 +110,7 @@ def _invoke_prompt(
     }
     response = client.responses.create(
         input=str(scenario["input"]),
+        store=True,
         extra_body={"agent_reference": reference},
     )
     for _ in range(_MAX_FUNCTION_TURNS):
@@ -140,6 +141,7 @@ def _invoke_prompt(
         response = client.responses.create(
             input=outputs,
             previous_response_id=str(getattr(response, "id", "") or ""),
+            store=True,
             extra_body={"agent_reference": reference},
         )
     raise OnboardingError(
@@ -196,6 +198,8 @@ def _invoke_hosted(
 def generate_sample_traffic(
     project: Any,
     deployment: AgentDeployment,
+    *,
+    outcome_observer: Callable[[TrafficOutcome], None] | None = None,
 ) -> list[TrafficOutcome]:
     scenarios = _load_scenarios(deployment.kind)
     if deployment.kind == "prompt":
@@ -230,7 +234,20 @@ def generate_sample_traffic(
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
         futures = [executor.submit(invoke, scenario) for scenario in scenarios]
-        outcomes = [future.result() for future in futures]
+        outcomes: list[TrafficOutcome] = []
+        first_error: BaseException | None = None
+        for future in concurrent.futures.as_completed(futures):
+            try:
+                outcome = future.result()
+            except BaseException as error:
+                if first_error is None:
+                    first_error = error
+                continue
+            outcomes.append(outcome)
+            if outcome_observer is not None:
+                outcome_observer(outcome)
+    if first_error is not None:
+        raise first_error
     outcomes.sort(key=lambda item: item.scenario)
     if len(outcomes) != 11:
         raise OnboardingError(
@@ -243,6 +260,8 @@ def generate_sample_traffic(
 def generate_existing_traffic(
     project: Any,
     deployment: AgentDeployment,
+    *,
+    outcome_observer: Callable[[TrafficOutcome], None] | None = None,
 ) -> list[TrafficOutcome]:
     prompts = (
         "Please provide a one-sentence health check.",
@@ -281,15 +300,16 @@ def generate_existing_traffic(
                 deployment,
                 scenario,
             )
-        outcomes.append(
-            TrafficOutcome(
-                scenario=f"existing-health-{index:03d}",
-                expected_fault=False,
-                response_id=response_id,
-                session_id=session_id,
-                trace_id=None,
-                started_at=started.isoformat(),
-                completed_at=datetime.now(UTC).isoformat(),
-            )
+        outcome = TrafficOutcome(
+            scenario=f"existing-health-{index:03d}",
+            expected_fault=False,
+            response_id=response_id,
+            session_id=session_id,
+            trace_id=None,
+            started_at=started.isoformat(),
+            completed_at=datetime.now(UTC).isoformat(),
         )
+        outcomes.append(outcome)
+        if outcome_observer is not None:
+            outcome_observer(outcome)
     return outcomes

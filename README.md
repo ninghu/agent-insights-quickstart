@@ -43,6 +43,10 @@ the selected resources. The workflow reports any missing access before mutation.
 | Existing Foundry project | Resolves the endpoint, validates or creates the Application Insights connection, repairs missing scoped access, validates an Agent Insights result, and asks whether to enable scheduled generation. |
 | Create a new Foundry project | Creates a tagged scratch project and monitoring stack, deploys either a Prompt Agent or source-code Hosted Agent, sends bounded sample traffic, enables Agent Insights, and verifies a first insight. |
 
+For best insight quality, the workflow recommends a current **GPT-5+** model. If the
+project has no suitable deployment, it finds quota-backed candidates and helps deploy
+one after confirmation.
+
 The scratch environment stays available after success. The final receipt identifies
 the number of insights returned, includes a direct Foundry agent-monitor link for
 reviewing details, identifies cost-bearing resources, and prints an ownership-checked
@@ -55,6 +59,7 @@ Owner. Common assignments include:
 
 - Cognitive Services OpenAI User for the project managed identity on the native model
   account
+- Foundry User for the project managed identity on the Foundry project
 - Monitoring Reader on the connected Application Insights component
 - Privileged Monitoring Data Reader on the linked Log Analytics workspace when trace
   content is protected

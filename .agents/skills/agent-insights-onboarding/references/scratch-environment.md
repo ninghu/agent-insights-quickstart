@@ -8,8 +8,10 @@ Scratch mode creates one tagged resource group containing:
 - Exact-scope role assignments
 - Either a Prompt Agent or a Python 3.13 source-code Hosted Agent
 
-The user chooses the subscription, supported region, available model, and sample agent
-type. Model availability and quota are checked before deployment.
+The user chooses the subscription, supported region, and sample agent type. Use
+[model selection](model-selection.md) to recommend a current GPT-5+ model with quota
+before deployment. Model lifecycle, chat/Responses capability, SKU, and quota are
+checked before mutation.
 
 ## Sample traffic
 
@@ -20,6 +22,8 @@ The sample is an order-status assistant with a deterministic `lookup_order` depe
 - healthy requests remain the majority;
 - concurrency is at most two;
 - model and tool calls have no retries.
+
+Use model capacity `30` by default to avoid predictable quickstart throttling.
 
 The CLI records response, session, and trace IDs and polls Application Insights until
 every expected root is correlated to the exact agent/version. It never sends extra

@@ -17,6 +17,10 @@ APIs. Reject malformed resource IDs, cross-subscription mismatches, non-HTTPS pr
 endpoints, multiple ambiguous Application Insights connections, and unavailable agents
 or models.
 
+Discover model deployments and recommend a current GPT-5+ deployment. If the project
+has none, use [model selection](model-selection.md) to find a quota-backed current model
+and guide a non-overwriting deployment before doctor.
+
 ## Mutation rules
 
 - Check project-level Application Insights connections before any monitor operation.

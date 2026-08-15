@@ -62,6 +62,16 @@ resource projectManagedIdentityModelUser 'Microsoft.Authorization/roleAssignment
   }
 }
 
+resource projectManagedIdentityFoundryUser 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(project.id, projectPrincipalId, foundryUserRoleGuid)
+  scope: project
+  properties: {
+    principalId: projectPrincipalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', foundryUserRoleGuid)
+  }
+}
+
 resource projectManagedIdentityMonitoringReader 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   name: guid(appInsights.id, projectPrincipalId, monitoringReaderRoleGuid)
   scope: appInsights

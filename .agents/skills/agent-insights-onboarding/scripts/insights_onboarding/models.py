@@ -35,11 +35,11 @@ class OnboardingConfig:
     application_insights_resource_id: str | None = None
     agent_name: str | None = None
     model_deployment_name: str | None = None
-    model_name: str = "gpt-4.1-mini"
-    model_version: str = "2025-04-14"
+    model_name: str = "gpt-5.4"
+    model_version: str = "2026-03-05"
     model_format: str = "OpenAI"
     model_sku: str = "GlobalStandard"
-    model_capacity: int = 1
+    model_capacity: int = 30
     lookback_hours: int = 168
     invoke_existing_agent: bool = False
     enable_existing_monitor: bool = False
