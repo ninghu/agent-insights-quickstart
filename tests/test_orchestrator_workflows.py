@@ -5,6 +5,7 @@ from dataclasses import asdict
 import pytest
 from insights_onboarding import orchestrator
 from insights_onboarding.models import MonitorOutcome, TrafficOutcome
+from insights_onboarding.permissions import MONITORING_READER, RequiredAssignment
 from insights_onboarding.receipts import read_json
 
 
@@ -57,6 +58,39 @@ def _patch_common_doctor(monkeypatch, azure_context) -> None:
             "Microsoft.OperationalInsights": "Registered",
         },
     )
+
+
+def test_role_preflight_returns_exact_admin_handoff(
+    monkeypatch,
+    azure_ids,
+) -> None:
+    assignment = RequiredAssignment(
+        principal_id="44444444-4444-4444-4444-444444444444",
+        principal_type="ServicePrincipal",
+        role=MONITORING_READER,
+        scope=azure_ids["app_insights"],
+    )
+    monkeypatch.setattr(
+        orchestrator,
+        "permissions_at_scope",
+        lambda *_args: [{"actions": ["*/read"], "notActions": []}],
+    )
+
+    with pytest.raises(orchestrator.OnboardingError) as excinfo:
+        orchestrator._require_assignment_write(
+            object(),
+            {azure_ids["app_insights"]},
+            [assignment],
+        )
+
+    assert excinfo.value.code == "insufficient_preflight_permission"
+    handoff = excinfo.value.details["admin_handoff"]
+    assert handoff["verification"] == "Rerun doctor and require status=ready."
+    item = handoff["role_assignments"][0]
+    assert item["principal_id"] == assignment.principal_id
+    assert item["role_definition_id"] == MONITORING_READER.definition_id
+    assert item["scope"] == azure_ids["app_insights"]
+    assert item["command"][-2:] == ["--name", assignment.assignment_id]
 
 
 def test_doctor_scratch_checks_permissions_and_model(

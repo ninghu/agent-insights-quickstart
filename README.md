@@ -43,7 +43,7 @@ Install the self-contained skill into an existing project, selecting your agent 
 
 ```shell
 gh skill install ninghu/agent-insights-quickstart \
-  agent-insights-onboarding@v0.1.4 \
+  agent-insights-onboarding@v0.1.5 \
   --allow-hidden-dirs \
   --agent AGENT_NAME
 ```
@@ -73,6 +73,11 @@ Owner. Common assignments include:
   content is protected
 - Foundry User or Foundry Project Manager for the current user on the selected project,
   depending on the sample agent type
+
+If the caller cannot create a required assignment, the workflow stops before mutation
+and produces an exact admin handoff with principal, role, scope, and Azure CLI command.
+After an administrator applies it, the workflow reruns doctor to verify access before
+enabling scheduling.
 
 See the skill's [permission reference](.agents/skills/agent-insights-onboarding/references/permissions.md)
 for the complete policy and prerequisites.

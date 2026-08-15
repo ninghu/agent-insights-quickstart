@@ -10,7 +10,7 @@ import platform
 import secrets
 import sys
 import time
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any, cast
@@ -179,16 +179,62 @@ def _validate_existing_model(cli: AzureCli, resources: ProjectResources) -> None
 def _require_assignment_write(
     cli: AzureCli,
     scopes: set[str],
+    assignments: Sequence[RequiredAssignment] = (),
 ) -> None:
-    for scope in sorted(scopes):
-        require_actions(
-            permissions_at_scope(cli, scope),
-            [
-                "Microsoft.Authorization/roleAssignments/write",
-                "Microsoft.Authorization/roleAssignments/delete",
+    handoff_assignments = [
+        {
+            "principal_id": assignment.principal_id,
+            "principal_type": assignment.principal_type,
+            "role_name": assignment.role.name,
+            "role_definition_id": assignment.role.definition_id,
+            "scope": assignment.scope,
+            "assignment_id": assignment.assignment_id,
+            "command": [
+                "az",
+                "role",
+                "assignment",
+                "create",
+                "--assignee-object-id",
+                assignment.principal_id,
+                "--assignee-principal-type",
+                assignment.principal_type,
+                "--role",
+                assignment.role.definition_id,
+                "--scope",
+                assignment.scope,
+                "--name",
+                assignment.assignment_id,
             ],
-            scope=scope,
-        )
+        }
+        for assignment in assignments
+    ]
+    for scope in sorted(scopes):
+        try:
+            require_actions(
+                permissions_at_scope(cli, scope),
+                [
+                    "Microsoft.Authorization/roleAssignments/write",
+                    "Microsoft.Authorization/roleAssignments/delete",
+                ],
+                scope=scope,
+            )
+        except OnboardingError as error:
+            raise OnboardingError(
+                "insufficient_preflight_permission",
+                "An Azure administrator must complete the RBAC handoff before onboarding.",
+                {
+                    **error.details,
+                    "admin_handoff": {
+                        "instructions": (
+                            "Ask an Azure administrator to apply the exact role "
+                            "assignments, then rerun the same doctor command. Do not "
+                            "continue based only on confirmation."
+                        ),
+                        "role_assignments": handoff_assignments,
+                        "verification": "Rerun doctor and require status=ready.",
+                    },
+                },
+            ) from error
 
 
 def _existing_caller_capabilities(
@@ -381,11 +427,12 @@ def doctor(config: OnboardingConfig, cli: AzureCli | None = None) -> dict[str, A
             foundry_authorized=foundry_authorized,
             monitoring_authorized=monitoring_authorized,
         )
+        missing_required_assignments = missing_assignments(selected_cli, assignments)
         scopes_requiring_assignments = {
-            item.scope
-            for item in missing_assignments(selected_cli, assignments)
+            item.scope for item in missing_required_assignments
         }
     else:
+        missing_required_assignments = []
         scopes_requiring_assignments = {
             mutation.target
             for mutation in _unresolved_identity_role_mutations(
@@ -394,7 +441,11 @@ def doctor(config: OnboardingConfig, cli: AzureCli | None = None) -> dict[str, A
                 resources=resources,
             )
         }
-    _require_assignment_write(selected_cli, scopes_requiring_assignments)
+    _require_assignment_write(
+        selected_cli,
+        scopes_requiring_assignments,
+        missing_required_assignments,
+    )
     result["existing"] = {
         "resources": asdict(resources),
         "project_location": project_location,

@@ -76,7 +76,15 @@ reference for the selected path:
    mutation if the subscription is not Agent Insights-enabled, the cloud is not
    `AzureCloud`, permissions are insufficient, the model lacks quota, or resources are
    ambiguous.
-12. When doctor returns `ready`, run:
+12. If doctor returns `insufficient_preflight_permission` with `admin_handoff`, show the
+   exact principal, role, scope, and command list. Ask:
+   **Has an Azure administrator completed this RBAC handoff?**
+   - **Yes, recheck access**
+   - **No, stop and keep the handoff**
+
+   On yes, rerun the same doctor command and require `status: ready`. Never enable
+   scheduling based only on the user's confirmation.
+13. When doctor returns `ready`, run:
 
    ```text
    python "<skill-root>/scripts/agent_insights_onboard.py" onboard <same arguments>
@@ -84,9 +92,9 @@ reference for the selected path:
 
    The CLI freezes and prints a plan, then automatically applies it. Do not insert a
    second approval prompt for the planned RBAC writes.
-13. Report progress from the CLI's JSON events without exposing subprocess output that
+14. Report progress from the CLI's JSON events without exposing subprocess output that
    the CLI redacted.
-14. Require a final receipt with `status: complete`. Give the user the Foundry portal
+15. Require a final receipt with `status: complete`. Give the user the Foundry portal
     link, agent/version, monitor/run/insight IDs, cost estimate when returned by the
     service, schedule interval/next run when enabled, receipt path, and cleanup command.
 

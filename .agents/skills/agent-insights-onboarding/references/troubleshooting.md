@@ -4,7 +4,7 @@
 | --- | --- | --- |
 | `unsupported_cloud` | Azure CLI is not using `AzureCloud`. | Switch to Azure public cloud; sovereign clouds are not supported in v1. |
 | `feature_unavailable` | The public project endpoint returned the preview's not-enabled response. | Use an Agent Insights-allowlisted subscription. |
-| `insufficient_preflight_permission` | The caller cannot perform a planned resource or role write. | Give the administrator handoff to an Azure administrator; no writes occurred. |
+| `insufficient_preflight_permission` | The caller cannot perform a planned resource or role write. | Give the exact `admin_handoff` role commands to an Azure administrator, then rerun doctor and require `ready`; no writes occurred. |
 | `ambiguous_app_insights_connection` | More than one project connection can satisfy the request. | Resolve the project configuration manually; the workflow never deletes or guesses. |
 | `model_unavailable` | The selected model/version/SKU is unavailable or lacks quota in the region. | Select a model returned by `doctor`. |
 | `role_propagation_timeout` | ARM accepted a role assignment but the data-plane probe still fails. | Keep the run directory and retry `status`; do not recreate the assignment. |

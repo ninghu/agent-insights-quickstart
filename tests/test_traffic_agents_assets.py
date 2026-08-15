@@ -159,3 +159,9 @@ def test_skill_asks_project_choice_before_azure_details(repo_root) -> None:
     assert question_index < skill.index("enabled subscriptions")
     assert "If exactly one Application Insights connection exists, reuse it" in skill
     assert "should scheduled\n   insight generation be enabled?" in skill
+    assert "Has an Azure administrator completed this RBAC handoff?" in skill
+    normalized = " ".join(skill.split())
+    assert (
+        "Never enable scheduling based only on the user's confirmation."
+        in normalized
+    )

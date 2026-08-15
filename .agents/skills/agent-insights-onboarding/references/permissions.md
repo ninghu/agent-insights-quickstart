@@ -14,6 +14,11 @@ custom roles are supported.
 If this prerequisite is absent, `doctor` stops before mutation and emits an
 administrator handoff. It does not attempt to elevate the caller.
 
+The handoff lists each missing principal, role definition ID, exact scope,
+deterministic assignment ID, and `az role assignment create` command. After an
+administrator applies it, rerun doctor and require `status: ready`; user confirmation
+alone never authorizes scheduling.
+
 ## Default remediation policy
 
 | Principal | Role ID | Scope | Purpose |
