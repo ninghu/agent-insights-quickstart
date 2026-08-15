@@ -186,6 +186,93 @@ def test_doctor_existing_accepts_repairable_data_plane_denial(
 
     assert result["existing"]["feature"]["reachable"] is True
     assert result["existing"]["feature"]["authorized"] is False
+    assert result["existing"]["trace_check"]["status"] == (
+        "deferred_until_caller_access_is_ready"
+    )
+
+
+def test_doctor_existing_checks_traces_without_invoking_agent(
+    monkeypatch,
+    make_config,
+    make_resources,
+    make_deployment,
+    azure_context,
+    azure_ids,
+) -> None:
+    _patch_common_doctor(monkeypatch, azure_context)
+    resources = make_resources()
+    deployment = make_deployment(name="existing-agent", kind="prompt")
+    monkeypatch.setattr(orchestrator, "resolve_existing", lambda *_args, **_kwargs: resources)
+    monkeypatch.setattr(
+        orchestrator,
+        "get_project",
+        lambda *_args, **_kwargs: {"location": "westus3"},
+    )
+    monkeypatch.setattr(
+        orchestrator,
+        "list_app_insights_connections",
+        lambda *_args, **_kwargs: [
+            {"id": "connection", "resource_id": azure_ids["app_insights"]}
+        ],
+    )
+    monkeypatch.setattr(orchestrator, "missing_assignments", lambda *_args: [])
+    monkeypatch.setattr(orchestrator, "_require_assignment_write", lambda *_args: None)
+    monkeypatch.setattr(orchestrator, "_validate_existing_model", lambda *_args: None)
+    monkeypatch.setattr(orchestrator, "_credential", lambda _context: object())
+    monkeypatch.setattr(
+        orchestrator,
+        "_existing_caller_capabilities",
+        lambda **_kwargs: (True, True),
+    )
+    monkeypatch.setattr(
+        orchestrator,
+        "validate_existing_agent",
+        lambda *_args, **_kwargs: deployment,
+    )
+    trace_checks: list[dict[str, object]] = []
+
+    def check_traces(**kwargs):
+        trace_checks.append(kwargs)
+        return [
+            {"trace_id": "trace-1"},
+            {"trace_id": "trace-2"},
+            {"trace_id": "trace-3"},
+        ]
+
+    monkeypatch.setattr(orchestrator, "require_recent_agent_roots", check_traces)
+    config = make_config(
+        mode="existing",
+        location=None,
+        agent_type="prompt",
+        project_resource_id=azure_ids["project"],
+        agent_name="existing-agent",
+        model_deployment_name="model",
+        application_insights_resource_id=azure_ids["app_insights"],
+    )
+
+    result = orchestrator.doctor(config, cli=object())
+
+    assert len(trace_checks) == 1
+    assert trace_checks[0]["deployment"] == deployment
+    assert result["existing"]["trace_check"] == {
+        "status": "ready",
+        "observed_agent_roots": 3,
+        "lookback_hours": 168,
+    }
+
+    monkeypatch.setattr(
+        orchestrator,
+        "require_recent_agent_roots",
+        lambda **_kwargs: (_ for _ in ()).throw(
+            orchestrator.OnboardingError(
+                "insufficient_recent_traces",
+                "Run normal application traffic, then rerun doctor.",
+            )
+        ),
+    )
+    with pytest.raises(orchestrator.OnboardingError) as no_traces:
+        orchestrator.doctor(config, cli=object())
+    assert no_traces.value.code == "insufficient_recent_traces"
 
 
 def test_onboard_scratch_writes_resumable_receipts(

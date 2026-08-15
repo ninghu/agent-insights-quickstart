@@ -50,7 +50,6 @@ def _add_configuration(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--model-capacity", type=int, default=30)
     parser.add_argument("--lookback-hours", type=int, default=168)
     parser.add_argument("--create-sample-agent", action="store_true")
-    parser.add_argument("--invoke-existing-agent", action="store_true")
     parser.add_argument("--enable-existing-monitor", action="store_true")
     protection = parser.add_mutually_exclusive_group()
     protection.add_argument(
@@ -110,11 +109,6 @@ def _config(args: argparse.Namespace) -> OnboardingConfig:
                 "conflicting_agent_selection",
                 "Choose either a new sample Agent or an existing Agent, not both.",
             )
-        if args.create_sample_agent and args.invoke_existing_agent:
-            raise OnboardingError(
-                "conflicting_agent_invocation",
-                "A new sample Agent generates its own bounded traffic.",
-            )
     return OnboardingConfig(
         mode=args.mode,
         subscription_id=args.subscription_id,
@@ -133,7 +127,7 @@ def _config(args: argparse.Namespace) -> OnboardingConfig:
         model_capacity=args.model_capacity,
         lookback_hours=args.lookback_hours,
         create_sample_agent=args.create_sample_agent,
-        invoke_existing_agent=args.invoke_existing_agent,
+        invoke_existing_agent=False,
         enable_existing_monitor=args.enable_existing_monitor,
         protected_trace_content=args.protected_trace_content,
     )

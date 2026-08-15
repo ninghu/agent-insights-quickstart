@@ -82,7 +82,9 @@ for the complete policy and prerequisites.
   mode.
 - The sample sends six healthy and five intentionally faulty requests with concurrency
   capped at two.
-- Existing agents are never invoked without a separate opt-in.
+- Newly created sample Agents use the known bounded traffic fixtures. Existing customer
+  Agents are never invoked by the quickstart; doctor checks for at least three recent
+  correlated traces and asks the user to run normal application traffic when none exist.
 - Existing agents, versions, monitors, connections, and role assignments are never
   deleted or overwritten.
 - A sample Agent created in an existing project uses deterministic ownership metadata.

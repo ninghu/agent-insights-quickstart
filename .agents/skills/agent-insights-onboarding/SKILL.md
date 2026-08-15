@@ -14,7 +14,8 @@ Run the reviewed onboarding CLI; do not compose Azure mutations independently.
 - Never guess a tenant, subscription, project, agent, model, or Application Insights resource.
 - Never grant Owner or broaden a role assignment above the exact documented resource.
 - Never delete or replace a pre-existing agent, version, monitor, connection, or role assignment.
-- Never invoke an existing customer agent unless the user separately opts in after seeing the agent name and traffic bound.
+- Never invoke an existing customer Agent. Only a sample Agent created by the workflow
+  may receive the reviewed bounded traffic fixtures.
 - Never print or persist access tokens, connection strings, keys, authorization headers, or raw customer telemetry.
 - Treat partial ingestion, a failed Agent Insights run, or an empty first result as failure.
 - If traffic was already generated, resume with `status`; never replay the same run.
@@ -61,10 +62,12 @@ reference for the selected path:
 
    For a new sample Agent, ask for **Prompt Agent** or **Code-based Hosted Agent** and pass
    `--create-sample-agent`. Do not ask for `--agent-name` or
-   `--invoke-existing-agent`; the CLI creates a deterministic receipt-owned Agent and
+   any traffic opt-in; the CLI creates a deterministic receipt-owned Agent and
    sends the bounded six healthy plus five faulty sample requests. For an existing Agent,
-   run `discover agents`, ask the user to select one, and preserve the separate invocation
-   opt-in.
+   run `discover agents` and ask the user to select one. Doctor checks for at least three
+   recent correlated traces without invoking the Agent. If none exist, tell the user to
+   run their normal application or test traffic, wait for Application Insights ingestion,
+   and rerun the same doctor command.
 8. For an existing project, ask: **After the first insight result, should scheduled
    insight generation be enabled?** Offer:
    - **Yes, enable scheduled insights (Recommended)**

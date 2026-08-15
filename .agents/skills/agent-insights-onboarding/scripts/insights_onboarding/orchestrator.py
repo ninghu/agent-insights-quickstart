@@ -71,7 +71,7 @@ from .provisioning import (
 )
 from .receipts import read_json, write_json_atomic
 from .resource_ids import parse_resource_id
-from .traffic import generate_existing_traffic, generate_sample_traffic
+from .traffic import generate_sample_traffic
 from .validation import validate_plan_context, validate_run_id
 
 _SKILL_ROOT = Path(__file__).resolve().parents[2]
@@ -291,16 +291,17 @@ def _validate_agent_selection(config: OnboardingConfig) -> None:
             "Scratch mode creates a sample Agent automatically.",
         )
     if config.mode != "existing" or not config.create_sample_agent:
+        if config.mode == "existing" and config.invoke_existing_agent:
+            raise OnboardingError(
+                "existing_agent_invocation_unsupported",
+                "The quickstart does not generate traffic for an existing customer Agent. "
+                "Run normal application traffic and rerun doctor.",
+            )
         return
     if config.agent_name:
         raise OnboardingError(
             "conflicting_agent_selection",
             "Choose either a new sample Agent or an existing Agent, not both.",
-        )
-    if config.invoke_existing_agent:
-        raise OnboardingError(
-            "conflicting_agent_invocation",
-            "A new sample Agent generates its own bounded traffic.",
         )
 
 
@@ -425,6 +426,7 @@ def doctor(config: OnboardingConfig, cli: AzureCli | None = None) -> dict[str, A
         context=context,
         resources=resources,
     )
+    recent_trace_count: int | None = None
     if foundry_authorized and not config.create_sample_agent:
         deployment = validate_existing_agent(
             project_client(resources.project_endpoint, context.tenant_id),
@@ -435,6 +437,16 @@ def doctor(config: OnboardingConfig, cli: AzureCli | None = None) -> dict[str, A
                 "agent_type_mismatch",
                 "Existing Agent kind differs from the selected permission policy.",
                 {"selected": config.agent_type, "actual": deployment.kind},
+            )
+        if monitoring_authorized:
+            recent_trace_count = len(
+                require_recent_agent_roots(
+                    credential=_credential(context),
+                    application_insights_resource_id=
+                        resources.application_insights_resource_id,
+                    deployment=deployment,
+                    lookback_hours=config.lookback_hours,
+                )
             )
     if resources.project_principal_id or not project_mi_execution:
         assignments = required_assignments(
@@ -483,6 +495,19 @@ def doctor(config: OnboardingConfig, cli: AzureCli | None = None) -> dict[str, A
             "authorized": foundry_authorized,
         },
         "caller_monitoring_authorized": monitoring_authorized,
+        "trace_check": (
+            {
+                "status": "ready",
+                "observed_agent_roots": recent_trace_count,
+                "lookback_hours": config.lookback_hours,
+            }
+            if recent_trace_count is not None
+            else {
+                "status": "not_applicable"
+                if config.create_sample_agent
+                else "deferred_until_caller_access_is_ready"
+            }
+        ),
     }
     return result
 
@@ -690,14 +715,6 @@ def build_plan(
                 {"healthy": 6, "fault": 5, "max_concurrency": 2},
             )
         )
-    elif config.invoke_existing_agent:
-        mutations.append(
-            Mutation(
-                "invoke_existing_agent",
-                config.agent_name or "",
-                {"request_count": 3, "max_concurrency": 1},
-            )
-        )
     mutations.extend(
         (
             Mutation("create_or_reuse_monitor", target_agent_name),
@@ -724,7 +741,7 @@ def build_plan(
         "traffic": (
             {"healthy": 6, "fault": 5, "total": 11}
             if creates_sample_agent
-            else {"generated": 3 if config.invoke_existing_agent else 0}
+            else {"generated": 0}
         ),
     }
     return OnboardingPlan.create(
@@ -1197,7 +1214,7 @@ def onboard(
     traffic_payload: dict[str, Any] = {
         "status": (
             "generating"
-            if creates_sample_agent or config.invoke_existing_agent
+            if creates_sample_agent
             else "using_existing"
         ),
         "run_id": selected_run_id,
@@ -1219,12 +1236,6 @@ def onboard(
     try:
         if creates_sample_agent:
             outcomes = generate_sample_traffic(
-                project,
-                deployment,
-                outcome_observer=record_outcome,
-            )
-        elif config.invoke_existing_agent:
-            outcomes = generate_existing_traffic(
                 project,
                 deployment,
                 outcome_observer=record_outcome,

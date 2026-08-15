@@ -276,7 +276,7 @@ def test_cli_configuration_and_timeout_validation(tmp_path) -> None:
         )
     assert conflicting_agent.value.code == "conflicting_agent_selection"
 
-    with pytest.raises(OnboardingError) as conflicting_invocation:
+    assert (
         cli_module._config(
             _config_namespace(
                 mode="existing",
@@ -286,8 +286,9 @@ def test_cli_configuration_and_timeout_validation(tmp_path) -> None:
                 create_sample_agent=True,
                 invoke_existing_agent=True,
             )
-        )
-    assert conflicting_invocation.value.code == "conflicting_agent_invocation"
+        ).invoke_existing_agent
+        is False
+    )
 
     with pytest.raises(OnboardingError) as invalid_timeout:
         cli_module.main(

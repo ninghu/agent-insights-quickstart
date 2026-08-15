@@ -19,8 +19,19 @@ def _escape_kql(value: str) -> str:
     return value.replace("'", "''")
 
 
-def _query(agent_name: str) -> str:
+def _query(
+    agent_name: str,
+    *,
+    agent_version: str | None = None,
+    root_limit: int | None = None,
+) -> str:
     escaped = _escape_kql(agent_name)
+    version_filter = (
+        f"| where agent_version == '{_escape_kql(agent_version)}'"
+        if agent_version
+        else ""
+    )
+    limit = f"| take {root_limit}" if root_limit is not None else ""
     return f"""
 let roots = materialize(
     union isfuzzy=true requests, dependencies
@@ -33,6 +44,7 @@ let roots = materialize(
     | extend hosted_session_id=tostring(customDimensions["azure.ai.agentserver.session_id"])
     | where isnotempty(trace_id) and agent_name == '{escaped}'
     | where operation_name == "invoke_agent"
+    {version_filter}
     | summarize
         root_count=count(),
         versions=make_set(agent_version, 10),
@@ -40,6 +52,7 @@ let roots = materialize(
         hosted_response_ids=make_set(hosted_response_id, 20),
         hosted_session_ids=make_set(hosted_session_id, 20)
       by trace_id
+    {limit}
 );
 union isfuzzy=true requests, dependencies
 | extend trace_id=tostring(operation_Id)
@@ -87,10 +100,16 @@ def _query_rows(
     agent_name: str,
     start: datetime,
     end: datetime,
+    agent_version: str | None = None,
+    root_limit: int | None = None,
 ) -> list[dict[str, Any]]:
     result = client.query_resource(
         application_insights_resource_id,
-        _query(agent_name),
+        _query(
+            agent_name,
+            agent_version=agent_version,
+            root_limit=root_limit,
+        ),
         timespan=(start, end),
         server_timeout=60,
     )
@@ -238,19 +257,21 @@ def require_recent_agent_roots(
         agent_name=deployment.name,
         start=end - timedelta(hours=lookback_hours),
         end=end,
+        agent_version=deployment.version,
+        root_limit=minimum_roots,
     )
-    matching = [
-        row
-        for row in rows
-        if deployment.version in _strings(row.get("versions"))
-    ]
-    if len(matching) < minimum_roots:
+    if len(rows) < minimum_roots:
         raise OnboardingError(
             "insufficient_recent_traces",
-            "The selected existing Agent version does not have enough recent traces.",
+            "The selected existing Agent version does not have enough recent traces. "
+            "Run normal application traffic for this Agent, wait for Application Insights "
+            "ingestion, then rerun doctor. The quickstart will not invent or send traffic "
+            "to an existing customer Agent.",
             {
+                "agent_name": deployment.name,
+                "agent_version": deployment.version,
                 "required": minimum_roots,
-                "observed": len(matching),
+                "observed": len(rows),
                 "lookback_hours": lookback_hours,
             },
         )
@@ -259,5 +280,5 @@ def require_recent_agent_roots(
             "trace_id": str(row.get("trace_id") or ""),
             "span_count": int(row.get("span_count") or 0),
         }
-        for row in matching
+        for row in rows
     ]

@@ -36,8 +36,10 @@ and guide a non-overwriting deployment before doctor.
 - Add only missing role assignments from the permission policy.
 - If a monitor exists, preserve its model, cadence, overview, and enabled state.
 - If no monitor exists, create one only after telemetry and dependency checks pass.
-- Do not invoke the selected agent unless the user separately opts in after seeing the
-  name and the bounded request count.
+- Never invoke a selected existing customer Agent. During doctor, require at least three
+  recent correlated roots for its selected immutable version. If none exist, ask the user
+  to exercise the Agent through their normal application or test path, wait for
+  Application Insights ingestion, and rerun doctor.
 - Explicit cleanup preserves every pre-existing Agent, monitor, and project identity. For
   a sample Agent created by the run, it removes only the receipt-owned monitor and Agent
   after validating the frozen plan, deterministic name, version, and live metadata. It

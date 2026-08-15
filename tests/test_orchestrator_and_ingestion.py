@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 import pytest
 from insights_onboarding import models, orchestrator
 from insights_onboarding.errors import OnboardingError
-from insights_onboarding.ingestion import _correlate
+from insights_onboarding.ingestion import _correlate, _query
 from insights_onboarding.models import Mutation, TrafficOutcome
 
 
@@ -13,6 +13,18 @@ class FrozenDateTime(datetime):
     @classmethod
     def now(cls, tz=None):
         return datetime(2026, 1, 2, 3, 4, 5, tzinfo=tz or UTC)
+
+
+def test_recent_trace_query_filters_version_and_bounds_roots() -> None:
+    query = _query(
+        "existing-agent",
+        agent_version="7",
+        root_limit=3,
+    )
+
+    assert "agent_name == 'existing-agent'" in query
+    assert "agent_version == '7'" in query
+    assert "| take 3" in query
 
 
 def test_plan_hash_contract_is_deterministic_when_clock_is_frozen(
@@ -103,7 +115,6 @@ def test_build_plan_for_existing_covers_role_connection_and_monitor_paths(
             agent_name="existing-agent",
             model_deployment_name="gpt-4-1-mini",
             agent_type="hosted",
-            invoke_existing_agent=True,
             enable_existing_monitor=True,
         ),
         context=azure_context,
@@ -114,12 +125,11 @@ def test_build_plan_for_existing_covers_role_connection_and_monitor_paths(
     assert [mutation["kind"] for mutation in plan.mutations] == [
         "create_app_insights_connections",
         "create_role_assignment",
-        "invoke_existing_agent",
         "create_or_reuse_monitor",
         "create_or_reuse_agent_insights_result",
         "enable_monitor",
     ]
-    assert plan.expected["traffic"] == {"generated": 3}
+    assert plan.expected["traffic"] == {"generated": 0}
     assert plan.expected["monitor_enabled"] is True
 
 
