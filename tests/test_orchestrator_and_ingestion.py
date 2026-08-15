@@ -123,6 +123,60 @@ def test_build_plan_for_existing_covers_role_connection_and_monitor_paths(
     assert plan.expected["monitor_enabled"] is True
 
 
+def test_build_plan_creates_sample_agent_in_existing_project(
+    monkeypatch, make_config, make_resources, azure_context, azure_ids, run_id: str
+) -> None:
+    monkeypatch.setattr(models, "datetime", FrozenDateTime)
+    monkeypatch.setattr(
+        orchestrator,
+        "resolve_existing",
+        lambda _cli, config: make_resources(),
+    )
+    monkeypatch.setattr(
+        orchestrator,
+        "list_app_insights_connections",
+        lambda *_args: [{"id": "connection"}],
+    )
+    monkeypatch.setattr(
+        orchestrator,
+        "_role_mutations",
+        lambda _cli, _assignments: [
+            Mutation("create_role_assignment", azure_ids["project"])
+        ],
+    )
+    monkeypatch.setattr(
+        orchestrator,
+        "_existing_caller_capabilities",
+        lambda **_kwargs: (False, False),
+    )
+
+    plan = orchestrator.build_plan(
+        make_config(
+            mode="existing",
+            location=None,
+            project_resource_id=azure_ids["project"],
+            agent_name=None,
+            model_deployment_name="gpt-5.4",
+            agent_type="prompt",
+            create_sample_agent=True,
+        ),
+        context=azure_context,
+        run_id=run_id,
+        cli=object(),
+    )
+
+    assert [mutation["kind"] for mutation in plan.mutations] == [
+        "create_role_assignment",
+        "create_sample_agent_version",
+        "generate_bounded_traffic",
+        "create_or_reuse_monitor",
+        "run_agent_insights",
+    ]
+    assert plan.mutations[1]["target"] == "insights-prompt-abc123def456"
+    assert plan.expected["traffic"] == {"healthy": 6, "fault": 5, "total": 11}
+    assert plan.expected["monitor_enabled"] is False
+
+
 def test_build_plan_scheduled_adds_identity_mutation_when_project_has_no_principal(
     monkeypatch, make_config, make_resources, azure_context, azure_ids, run_id: str
 ) -> None:

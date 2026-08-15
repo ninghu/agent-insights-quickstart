@@ -40,7 +40,7 @@ the selected resources. The workflow reports any missing access before mutation.
 
 | Path | Result |
 | --- | --- |
-| Existing Foundry project | Resolves the endpoint, validates or creates the Application Insights connection, repairs missing scoped access, validates an Agent Insights result, and asks whether to enable scheduled generation. |
+| Existing Foundry project | Resolves the endpoint, lets you select an existing Agent or create a new sample Prompt/Hosted Agent in that project, validates the Application Insights connection and first result, and asks whether to enable scheduled generation. |
 | Create a new Foundry project | Creates a tagged scratch project and monitoring stack, deploys either a Prompt Agent or source-code Hosted Agent, sends bounded sample traffic, enables Agent Insights, and verifies a first insight. |
 
 For best insight quality, the workflow recommends a current **GPT-5+** model. If the
@@ -85,7 +85,14 @@ for the complete policy and prerequisites.
 - Existing agents are never invoked without a separate opt-in.
 - Existing agents, versions, monitors, connections, and role assignments are never
   deleted or overwritten.
-- Cleanup operates only on resources whose receipt and ownership tags match.
+- A sample Agent created in an existing project uses deterministic ownership metadata.
+  Cleanup removes only its receipt-owned monitor and Agent after live ownership checks.
+- Cleanup operates only on resources whose receipt and ownership metadata match.
+
+## Feedback
+
+Report any bug or improvement suggestion with the
+[Agent Insights bug template](https://msdata.visualstudio.com/Vienna/_workitems/create/Bug?templateId=6d5d4dfe-fd55-45f3-b9c9-f7cc2b0e1835&ownerId=5d069bfc-f7ae-4d93-bee7-c94d439a26a7).
 
 <details>
 <summary>Advanced: standalone CLI and development</summary>

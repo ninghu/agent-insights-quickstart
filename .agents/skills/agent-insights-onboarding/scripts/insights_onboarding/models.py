@@ -41,6 +41,7 @@ class OnboardingConfig:
     model_sku: str = "GlobalStandard"
     model_capacity: int = 30
     lookback_hours: int = 168
+    create_sample_agent: bool = False
     invoke_existing_agent: bool = False
     enable_existing_monitor: bool = False
     protected_trace_content: bool = False

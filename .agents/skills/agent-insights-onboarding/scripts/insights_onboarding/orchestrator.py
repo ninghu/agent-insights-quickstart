@@ -15,7 +15,8 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any, cast
 
-from .agents import create_sample_agent, project_client, validate_existing_agent
+from .agents import agent_name as sample_agent_name
+from .agents import create_sample_agent, delete_owned_agent, project_client, validate_existing_agent
 from .azure_cli import AzureCli
 from .discovery import (
     check_azure_cli_version,
@@ -74,6 +75,11 @@ from .traffic import generate_existing_traffic, generate_sample_traffic
 from .validation import validate_plan_context, validate_run_id
 
 _SKILL_ROOT = Path(__file__).resolve().parents[2]
+_FEEDBACK_URL = (
+    "https://msdata.visualstudio.com/Vienna/_workitems/create/Bug"
+    "?templateId=6d5d4dfe-fd55-45f3-b9c9-f7cc2b0e1835"
+    "&ownerId=5d069bfc-f7ae-4d93-bee7-c94d439a26a7"
+)
 
 
 def _find_workspace_root(start: Path | None = None) -> Path:
@@ -270,10 +276,7 @@ def _filter_existing_caller_assignments(
         if assignment.principal_id.casefold() != context.user_object_id.casefold():
             filtered.append(assignment)
             continue
-        if foundry_authorized and assignment.role in {
-            FOUNDRY_USER,
-            FOUNDRY_PROJECT_MANAGER,
-        }:
+        if foundry_authorized and assignment.role == FOUNDRY_USER:
             continue
         if monitoring_authorized and assignment.role == MONITORING_READER:
             continue
@@ -281,7 +284,28 @@ def _filter_existing_caller_assignments(
     return filtered
 
 
+def _validate_agent_selection(config: OnboardingConfig) -> None:
+    if config.mode == "scratch" and config.create_sample_agent:
+        raise OnboardingError(
+            "invalid_agent_selection",
+            "Scratch mode creates a sample Agent automatically.",
+        )
+    if config.mode != "existing" or not config.create_sample_agent:
+        return
+    if config.agent_name:
+        raise OnboardingError(
+            "conflicting_agent_selection",
+            "Choose either a new sample Agent or an existing Agent, not both.",
+        )
+    if config.invoke_existing_agent:
+        raise OnboardingError(
+            "conflicting_agent_invocation",
+            "A new sample Agent generates its own bounded traffic.",
+        )
+
+
 def doctor(config: OnboardingConfig, cli: AzureCli | None = None) -> dict[str, Any]:
+    _validate_agent_selection(config)
     selected_cli = cli or AzureCli()
     package_versions = _check_python_and_packages()
     cli_version = check_azure_cli_version(selected_cli)
@@ -401,7 +425,7 @@ def doctor(config: OnboardingConfig, cli: AzureCli | None = None) -> dict[str, A
         context=context,
         resources=resources,
     )
-    if foundry_authorized:
+    if foundry_authorized and not config.create_sample_agent:
         deployment = validate_existing_agent(
             project_client(resources.project_endpoint, context.tenant_id),
             name=config.agent_name or "",
@@ -423,7 +447,7 @@ def doctor(config: OnboardingConfig, cli: AzureCli | None = None) -> dict[str, A
             agent_type=config.agent_type,
             protected_trace_content=config.protected_trace_content,
             project_mi_execution=project_mi_execution,
-            manage_hosted_agent=False,
+            manage_hosted_agent=config.create_sample_agent,
         )
         assignments = _filter_existing_caller_assignments(
             assignments,
@@ -556,6 +580,12 @@ def build_plan(
     cli: AzureCli,
 ) -> OnboardingPlan:
     validate_run_id(run_id)
+    creates_sample_agent = config.mode == "scratch" or config.create_sample_agent
+    target_agent_name = (
+        sample_agent_name(run_id, config.agent_type)
+        if creates_sample_agent and config.agent_type
+        else config.agent_name or ""
+    )
     mutations: list[Mutation] = []
     if config.mode == "scratch":
         mutations.extend(
@@ -618,7 +648,7 @@ def build_plan(
                 agent_type=config.agent_type,
                 protected_trace_content=config.protected_trace_content,
                 project_mi_execution=project_mi_execution,
-                manage_hosted_agent=False,
+                manage_hosted_agent=config.create_sample_agent,
             )
             foundry_authorized, monitoring_authorized = (
                 _existing_caller_capabilities(
@@ -641,18 +671,22 @@ def build_plan(
                     resources=resources,
                 )
             )
-    if config.mode == "scratch":
+    if creates_sample_agent:
         mutations.append(
             Mutation(
                 "create_sample_agent_version",
-                config.agent_type or "",
-                {"immutable": True},
+                target_agent_name,
+                {
+                    "agent_type": config.agent_type,
+                    "immutable": True,
+                    "project_mode": config.mode,
+                },
             )
         )
         mutations.append(
             Mutation(
                 "generate_bounded_traffic",
-                "sample-agent",
+                target_agent_name,
                 {"healthy": 6, "fault": 5, "max_concurrency": 2},
             )
         )
@@ -666,14 +700,14 @@ def build_plan(
         )
     mutations.extend(
         (
-            Mutation("create_or_reuse_monitor", config.agent_name or "sample-agent"),
+            Mutation("create_or_reuse_monitor", target_agent_name),
             Mutation(
                 (
                     "run_agent_insights"
-                    if config.mode == "scratch"
+                    if creates_sample_agent
                     else "create_or_reuse_agent_insights_result"
                 ),
-                config.agent_name or "sample-agent",
+                target_agent_name,
                 {
                     "require_nonempty_insights": True,
                     "lookback_hours": config.lookback_hours,
@@ -682,16 +716,14 @@ def build_plan(
         )
     )
     if config.mode == "scratch" or config.enable_existing_monitor:
-        mutations.append(
-            Mutation("enable_monitor", config.agent_name or "sample-agent")
-        )
+        mutations.append(Mutation("enable_monitor", target_agent_name))
     expected = {
         "first_result": "nonempty",
         "monitor_enabled": config.mode == "scratch"
         or config.enable_existing_monitor,
         "traffic": (
             {"healthy": 6, "fault": 5, "total": 11}
-            if config.mode == "scratch"
+            if creates_sample_agent
             else {"generated": 3 if config.invoke_existing_agent else 0}
         ),
     }
@@ -778,7 +810,8 @@ def _ensure_roles(
         protected_trace_content=config.protected_trace_content,
         project_mi_execution=config.mode == "scratch"
         or config.enable_existing_monitor,
-        manage_hosted_agent=config.mode == "scratch",
+        manage_hosted_agent=config.mode == "scratch"
+        or config.create_sample_agent,
     )
     if config.mode == "scratch":
         deadline = time.monotonic() + 90
@@ -1037,6 +1070,7 @@ def _finalize(
         "foundry_portal_url": insights_portal_url,
         "foundry_project_url": project_portal_url,
         "agent_insights_portal_url": insights_portal_url,
+        "feedback_url": _FEEDBACK_URL,
         "portal_instructions": (
             "Open the Agent Insights link. If the portal redirects to project home, "
             "select Monitor, choose the agent, and open Agent Insights."
@@ -1104,6 +1138,7 @@ def onboard(
         tenant_id=live_context.tenant_id,
         user_object_id=live_context.user_object_id,
     )
+    creates_sample_agent = config.mode == "scratch" or config.create_sample_agent
     if config.mode == "scratch":
         resources = provision_scratch(
             selected_cli,
@@ -1127,9 +1162,9 @@ def onboard(
     )
     _wait_for_authorization(resources=resources, context=live_context)
     project = project_client(resources.project_endpoint, live_context.tenant_id)
-    if config.mode == "scratch":
+    if creates_sample_agent:
         if not config.agent_type:
-            raise OnboardingError("missing_agent_type", "Scratch Agent type is missing.")
+            raise OnboardingError("missing_agent_type", "Sample Agent type is missing.")
         deployment = create_sample_agent(
             project,
             run_id=selected_run_id,
@@ -1151,6 +1186,7 @@ def onboard(
         "mode": config.mode,
         "project": asdict(resources),
         "agent": asdict(deployment),
+        "agent_created": creates_sample_agent,
         "created_role_assignments": list(created_roles),
         "created_role_assignment_ids": [
             item["id"] for item in created_roles
@@ -1161,7 +1197,7 @@ def onboard(
     traffic_payload: dict[str, Any] = {
         "status": (
             "generating"
-            if config.mode == "scratch" or config.invoke_existing_agent
+            if creates_sample_agent or config.invoke_existing_agent
             else "using_existing"
         ),
         "run_id": selected_run_id,
@@ -1181,7 +1217,7 @@ def onboard(
         write_json_atomic(run_dir / "traffic-receipt.json", traffic_payload)
 
     try:
-        if config.mode == "scratch":
+        if creates_sample_agent:
             outcomes = generate_sample_traffic(
                 project,
                 deployment,
@@ -1342,6 +1378,71 @@ def status(
     )
 
 
+def _cleanup_existing_sample_agent(
+    *,
+    run_dir: Path,
+    plan: dict[str, Any],
+    provisioning: dict[str, Any],
+    resources: ProjectResources,
+    context: AzureContext,
+) -> None:
+    agent_payload = provisioning.get("agent")
+    if not isinstance(agent_payload, dict) or not provisioning.get("agent_created"):
+        raise OnboardingError(
+            "invalid_cleanup_receipt",
+            "Existing-project sample Agent cleanup requires an ownership receipt.",
+        )
+    deployment = AgentDeployment(**agent_payload)
+    run_id = str(plan["run_id"])
+    expected_name = sample_agent_name(run_id, deployment.kind)
+    planned_agents = [
+        item
+        for item in plan.get("mutations", [])
+        if isinstance(item, dict)
+        and item.get("kind") == "create_sample_agent_version"
+    ]
+    if (
+        len(planned_agents) != 1
+        or planned_agents[0].get("target") != deployment.name
+        or deployment.name != expected_name
+    ):
+        raise OnboardingError(
+            "agent_cleanup_target_mismatch",
+            "Agent cleanup target is not present in the frozen plan.",
+        )
+
+    monitor_state: dict[str, Any] = {}
+    for name in ("insights-receipt.json", "insights-state.json"):
+        path = run_dir / name
+        if path.exists():
+            monitor_state = read_json(path)
+            break
+    monitor_id = str(monitor_state.get("monitor_id") or "")
+    if monitor_id:
+        if not monitor_state.get("monitor_created"):
+            raise OnboardingError(
+                "monitor_cleanup_target_mismatch",
+                "The Agent monitor was not created by this quickstart run.",
+            )
+        with AgentInsightsClient(
+            project_endpoint=resources.project_endpoint,
+            credential=_credential(context),
+        ) as insights:
+            live_monitor = insights.get_monitor(monitor_id)
+            if (
+                str(live_monitor.get("id") or "") != monitor_id
+                or str(live_monitor.get("agent_name") or "") != deployment.name
+            ):
+                raise OnboardingError(
+                    "monitor_cleanup_target_mismatch",
+                    "Live monitor no longer matches the quickstart receipt.",
+                )
+            insights.delete_monitor(monitor_id)
+
+    project = project_client(resources.project_endpoint, context.tenant_id)
+    delete_owned_agent(project, deployment=deployment, run_id=run_id)
+
+
 def cleanup(run_dir: Path, cli: AzureCli | None = None) -> dict[str, Any]:
     selected_cli = cli or AzureCli()
     plan = read_json(run_dir / "plan.json")
@@ -1369,6 +1470,14 @@ def cleanup(run_dir: Path, cli: AzureCli | None = None) -> dict[str, Any]:
             owner_object_id=context.user_object_id,
         )
     else:
+        if config.create_sample_agent:
+            _cleanup_existing_sample_agent(
+                run_dir=run_dir,
+                plan=plan,
+                provisioning=provisioning,
+                resources=resources,
+                context=context,
+            )
         connection_mutations = [
             item
             for item in plan.get("mutations", [])

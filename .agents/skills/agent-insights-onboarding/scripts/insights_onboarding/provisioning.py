@@ -228,12 +228,13 @@ def resolve_existing(
 ) -> ProjectResources:
     if (
         not config.project_resource_id
-        or not config.agent_name
+        or (not config.create_sample_agent and not config.agent_name)
         or not config.model_deployment_name
     ):
         raise OnboardingError(
             "incomplete_existing_configuration",
-            "Existing mode requires project, agent, and model deployment.",
+            "Existing mode requires a project, model deployment, and either an existing "
+            "Agent or a new sample Agent selection.",
         )
     project_id = require_resource_type(
         config.project_resource_id,

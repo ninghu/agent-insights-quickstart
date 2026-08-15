@@ -58,6 +58,7 @@ def _config_namespace(**overrides: object) -> argparse.Namespace:
         "model_sku": "GlobalStandard",
         "model_capacity": 30,
         "lookback_hours": 168,
+        "create_sample_agent": False,
         "invoke_existing_agent": False,
         "enable_existing_monitor": False,
         "protected_trace_content": False,
@@ -228,9 +229,65 @@ def test_cli_configuration_and_timeout_validation(tmp_path) -> None:
     assert existing_missing.value.code == "incomplete_existing_configuration"
     assert existing_missing.value.details["missing"] == [
         "--project-resource-id",
-        "--agent-name",
         "--model-deployment-name",
+        "--agent-name",
     ]
+
+    created_agent = cli_module._config(
+        _config_namespace(
+            mode="existing",
+            location=None,
+            project_resource_id="/subscriptions/sub/resourceGroups/rg/providers/"
+            "Microsoft.CognitiveServices/accounts/account/projects/project",
+            model_deployment_name="gpt-5.4",
+            create_sample_agent=True,
+        )
+    )
+    assert created_agent.agent_name is None
+    assert created_agent.create_sample_agent is True
+    parsed_created_agent = cli_module.parse_args(
+        [
+            "doctor",
+            "--mode",
+            "existing",
+            "--subscription-id",
+            "00000000-0000-0000-0000-000000000000",
+            "--project-resource-id",
+            "project",
+            "--agent-type",
+            "prompt",
+            "--model-deployment-name",
+            "gpt-5.4",
+            "--create-sample-agent",
+        ]
+    )
+    assert parsed_created_agent.create_sample_agent is True
+
+    with pytest.raises(OnboardingError) as conflicting_agent:
+        cli_module._config(
+            _config_namespace(
+                mode="existing",
+                location=None,
+                project_resource_id="project",
+                model_deployment_name="gpt-5.4",
+                agent_name="existing-agent",
+                create_sample_agent=True,
+            )
+        )
+    assert conflicting_agent.value.code == "conflicting_agent_selection"
+
+    with pytest.raises(OnboardingError) as conflicting_invocation:
+        cli_module._config(
+            _config_namespace(
+                mode="existing",
+                location=None,
+                project_resource_id="project",
+                model_deployment_name="gpt-5.4",
+                create_sample_agent=True,
+                invoke_existing_agent=True,
+            )
+        )
+    assert conflicting_invocation.value.code == "conflicting_agent_invocation"
 
     with pytest.raises(OnboardingError) as invalid_timeout:
         cli_module.main(

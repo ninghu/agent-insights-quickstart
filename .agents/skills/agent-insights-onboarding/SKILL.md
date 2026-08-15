@@ -54,7 +54,18 @@ reference for the selected path:
      CLI creates the missing project/account connection and scoped access.
    - If multiple Application Insights connections exist, stop with the ambiguity instead
      of guessing or deleting one.
-7. For an existing project, ask: **After the first insight result, should scheduled
+7. For an existing project, ask: **Would you like to use an existing Agent or create a
+   new sample Agent in this project?** Offer:
+   - **Create a new sample Agent (Recommended)**
+   - **Use an existing Agent**
+
+   For a new sample Agent, ask for **Prompt Agent** or **Code-based Hosted Agent** and pass
+   `--create-sample-agent`. Do not ask for `--agent-name` or
+   `--invoke-existing-agent`; the CLI creates a deterministic receipt-owned Agent and
+   sends the bounded six healthy plus five faulty sample requests. For an existing Agent,
+   run `discover agents`, ask the user to select one, and preserve the separate invocation
+   opt-in.
+8. For an existing project, ask: **After the first insight result, should scheduled
    insight generation be enabled?** Offer:
    - **Yes, enable scheduled insights (Recommended)**
    - **No, keep this as a one-off**
@@ -64,7 +75,7 @@ reference for the selected path:
    already enabled, preserve it and report its next scheduled run.
    One-off runs use caller OBO. Do not plan Project MI model, project, or monitoring
    roles unless scheduled generation is enabled.
-8. Select the insight generation model:
+9. Select the insight generation model:
    - For an existing project, run `discover deployments` and recommend a current GPT-5+
      deployment.
    - If none exists, or for a new project, run `discover models` for the selected region.
@@ -73,22 +84,22 @@ reference for the selected path:
      confirm. Do not overwrite a different existing deployment. If the caller lacks
      permission, hand the same command to an Azure administrator and verify afterward.
    - Do not recommend GPT-4-class or older models for production insights.
-9. When creating a new project, ask the user to choose **Prompt Agent** or
+10. When creating a new project, ask the user to choose **Prompt Agent** or
    **Code-based Hosted Agent**, then show enabled subscriptions and ask them to select
    one.
-10. Gather only the choices needed by the selected path. Prefer CLI discovery over
+11. Gather only the choices needed by the selected path. Prefer CLI discovery over
    asking the user to paste resource IDs.
-11. From the user's current repository root, run the read-only doctor first:
+12. From the user's current repository root, run the read-only doctor first:
 
    ```text
    python "<skill-root>/scripts/agent_insights_onboard.py" doctor <arguments>
    ```
 
-12. Show the doctor's non-secret context and exact missing prerequisites. Stop before
+13. Show the doctor's non-secret context and exact missing prerequisites. Stop before
    mutation if the subscription is not Agent Insights-enabled, the cloud is not
    `AzureCloud`, permissions are insufficient, the model lacks quota, or resources are
    ambiguous.
-13. If doctor returns `insufficient_preflight_permission` with `admin_handoff`, show the
+14. If doctor returns `insufficient_preflight_permission` with `admin_handoff`, show the
    exact principal, role, scope, and command list. Ask:
    **Has an Azure administrator completed this RBAC handoff?**
    - **Yes, recheck access**
@@ -96,7 +107,7 @@ reference for the selected path:
 
    On yes, rerun the same doctor command and require `status: ready`. Never enable
    scheduling based only on the user's confirmation.
-14. When doctor returns `ready`, run:
+15. When doctor returns `ready`, run:
 
    ```text
    python "<skill-root>/scripts/agent_insights_onboard.py" onboard <same arguments>
@@ -104,9 +115,9 @@ reference for the selected path:
 
    The CLI freezes and prints a plan, then automatically applies it. Do not insert a
    second approval prompt for the planned RBAC writes.
-15. Report progress from the CLI's JSON events without exposing subprocess output that
+16. Report progress from the CLI's JSON events without exposing subprocess output that
    the CLI redacted.
-16. Require a final receipt with `status: complete`. Give the user the Foundry portal
+17. Require a final receipt with `status: complete`. Give the user the Foundry portal
     link, first-result insight count, agent/version, monitor/run/insight IDs, cost
     estimate when returned by the service, schedule interval/next run when enabled,
     receipt path, and cleanup command. End with this concise handoff:
@@ -116,6 +127,7 @@ reference for the selected path:
     Insights generated: <insight_count>
     Review details: <agent_insights_portal_url>
     In Foundry, open Monitor > Agent Insights if the link lands on project home.
+    Report bugs or improvement suggestions: <feedback_url>
     ```
 
 ## Recovery

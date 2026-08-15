@@ -93,6 +93,7 @@ def make_config(subscription_id: str):
             "model_format": "OpenAI",
             "model_sku": "GlobalStandard",
             "model_capacity": 1,
+            "create_sample_agent": False,
             "invoke_existing_agent": False,
             "enable_existing_monitor": False,
             "protected_trace_content": False,

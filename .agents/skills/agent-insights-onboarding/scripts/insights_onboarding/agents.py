@@ -243,6 +243,45 @@ def create_sample_agent(
         )
 
 
+def delete_owned_agent(
+    project: Any,
+    *,
+    deployment: AgentDeployment,
+    run_id: str,
+) -> None:
+    expected_name = agent_name(run_id, deployment.kind)
+    if deployment.name != expected_name:
+        raise OnboardingError(
+            "agent_cleanup_target_mismatch",
+            "Agent cleanup target does not match the deterministic quickstart name.",
+        )
+    try:
+        versions = list(
+            project.agents.list_versions(
+                deployment.name,
+                limit=100,
+                order="desc",
+            )
+        )
+    except HttpResponseError as error:
+        if error.status_code == 404:
+            raise OnboardingError(
+                "agent_cleanup_target_missing",
+                "The quickstart-owned Agent no longer exists.",
+            ) from error
+        raise
+    if (
+        len(versions) != 1
+        or str(getattr(versions[0], "version", "") or "") != deployment.version
+        or not _owned_version(versions[0], run_id, deployment.kind)
+    ):
+        raise OnboardingError(
+            "agent_cleanup_target_mismatch",
+            "Live Agent versions no longer match the quickstart ownership receipt.",
+        )
+    project.agents.delete(deployment.name, force=True)
+
+
 def validate_existing_agent(project: Any, *, name: str) -> AgentDeployment:
     try:
         versions = list(project.agents.list_versions(name, limit=1, order="desc"))

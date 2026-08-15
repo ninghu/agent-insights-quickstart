@@ -49,6 +49,7 @@ def _add_configuration(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--model-sku", default="GlobalStandard")
     parser.add_argument("--model-capacity", type=int, default=30)
     parser.add_argument("--lookback-hours", type=int, default=168)
+    parser.add_argument("--create-sample-agent", action="store_true")
     parser.add_argument("--invoke-existing-agent", action="store_true")
     parser.add_argument("--enable-existing-monitor", action="store_true")
     protection = parser.add_mutually_exclusive_group()
@@ -78,24 +79,41 @@ def _config(args: argparse.Namespace) -> OnboardingConfig:
             "invalid_lookback",
             "Lookback hours must be between 3 and 2160.",
         )
-    if args.mode == "scratch" and (not args.location or not args.agent_type):
-        raise OnboardingError(
-            "incomplete_scratch_configuration",
-            "Scratch mode requires --location and --agent-type.",
-        )
+    if args.mode == "scratch":
+        if not args.location or not args.agent_type:
+            raise OnboardingError(
+                "incomplete_scratch_configuration",
+                "Scratch mode requires --location and --agent-type.",
+            )
+        if args.create_sample_agent:
+            raise OnboardingError(
+                "invalid_agent_selection",
+                "Scratch mode creates a sample Agent automatically.",
+            )
     if args.mode == "existing":
         required = {
             "--agent-type": args.agent_type,
             "--project-resource-id": args.project_resource_id,
-            "--agent-name": args.agent_name,
             "--model-deployment-name": args.model_deployment_name,
         }
+        if not args.create_sample_agent:
+            required["--agent-name"] = args.agent_name
         missing = [name for name, value in required.items() if not value]
         if missing:
             raise OnboardingError(
                 "incomplete_existing_configuration",
                 "Existing mode is missing required arguments.",
                 {"missing": missing},
+            )
+        if args.create_sample_agent and args.agent_name:
+            raise OnboardingError(
+                "conflicting_agent_selection",
+                "Choose either a new sample Agent or an existing Agent, not both.",
+            )
+        if args.create_sample_agent and args.invoke_existing_agent:
+            raise OnboardingError(
+                "conflicting_agent_invocation",
+                "A new sample Agent generates its own bounded traffic.",
             )
     return OnboardingConfig(
         mode=args.mode,
@@ -114,6 +132,7 @@ def _config(args: argparse.Namespace) -> OnboardingConfig:
         model_sku=args.model_sku,
         model_capacity=args.model_capacity,
         lookback_hours=args.lookback_hours,
+        create_sample_agent=args.create_sample_agent,
         invoke_existing_agent=args.invoke_existing_agent,
         enable_existing_monitor=args.enable_existing_monitor,
         protected_trace_content=args.protected_trace_content,

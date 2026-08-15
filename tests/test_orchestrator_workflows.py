@@ -435,6 +435,123 @@ def test_onboard_existing_reuses_traces_without_invocation(
     assert traffic["outcomes"] == []
 
 
+def test_onboard_existing_can_create_sample_agent(
+    monkeypatch,
+    tmp_path,
+    make_config,
+    make_resources,
+    make_deployment,
+    azure_context,
+    azure_ids,
+    run_id,
+) -> None:
+    config = make_config(
+        mode="existing",
+        location=None,
+        agent_type="prompt",
+        project_resource_id=azure_ids["project"],
+        agent_name=None,
+        model_deployment_name="gpt-5.4",
+        application_insights_resource_id=azure_ids["app_insights"],
+        create_sample_agent=True,
+    )
+    resources = make_resources()
+    deployment = make_deployment(
+        name="insights-prompt-abc123def456",
+        version="1",
+    )
+    outcomes = [
+        TrafficOutcome(
+            scenario=f"scenario-{index}",
+            expected_fault=index > 6,
+            response_id=f"resp-{index}",
+            session_id=None,
+            trace_id=None,
+            started_at="2026-01-01T00:00:00+00:00",
+            completed_at="2026-01-01T00:00:01+00:00",
+        )
+        for index in range(1, 12)
+    ]
+    monitor = MonitorOutcome(
+        monitor_id="monitor-created",
+        run_id="run-created",
+        insight_ids=("insight-created",),
+        estimated_cost=None,
+        enabled=False,
+    )
+    monkeypatch.setattr(orchestrator, "_RUNS_ROOT", tmp_path)
+    monkeypatch.setattr(orchestrator, "doctor", lambda *_args, **_kwargs: {"status": "ready"})
+    monkeypatch.setattr(
+        orchestrator,
+        "select_context",
+        lambda _cli, _subscription_id: azure_context,
+    )
+    monkeypatch.setattr(
+        orchestrator,
+        "resolve_existing",
+        lambda *_args, **_kwargs: resources,
+    )
+    monkeypatch.setattr(
+        orchestrator,
+        "list_app_insights_connections",
+        lambda *_args, **_kwargs: [{"id": "connection"}],
+    )
+    monkeypatch.setattr(
+        orchestrator,
+        "_existing_caller_capabilities",
+        lambda **_kwargs: (True, True),
+    )
+    monkeypatch.setattr(orchestrator, "_role_mutations", lambda *_args: [])
+    monkeypatch.setattr(
+        orchestrator,
+        "_apply_existing",
+        lambda *_args, **_kwargs: (resources, ()),
+    )
+    monkeypatch.setattr(orchestrator, "_ensure_roles", lambda *_args, **_kwargs: ())
+    monkeypatch.setattr(orchestrator, "_wait_for_authorization", lambda **_kwargs: None)
+    monkeypatch.setattr(orchestrator, "project_client", lambda *_args: object())
+    monkeypatch.setattr(
+        orchestrator,
+        "create_sample_agent",
+        lambda *_args, **_kwargs: deployment,
+    )
+    monkeypatch.setattr(
+        orchestrator,
+        "validate_existing_agent",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("Existing Agent validation must not run")
+        ),
+    )
+    monkeypatch.setattr(
+        orchestrator,
+        "generate_sample_traffic",
+        lambda *_args, **_kwargs: outcomes,
+    )
+    monkeypatch.setattr(orchestrator, "_credential", lambda _context: object())
+    monkeypatch.setattr(
+        orchestrator,
+        "wait_for_ingestion",
+        lambda **_kwargs: [{"trace_id": "trace-created"}],
+    )
+    monkeypatch.setattr(orchestrator, "AgentInsightsClient", FakeInsights)
+    monkeypatch.setattr(
+        orchestrator,
+        "_complete_monitor",
+        lambda **_kwargs: (monitor, True),
+    )
+
+    final = orchestrator.onboard(config, run_id=run_id, cli=object())
+
+    run_dir = tmp_path / run_id
+    provisioning = read_json(run_dir / "provisioning-receipt.json")
+    assert provisioning["agent_created"] is True
+    assert provisioning["agent"]["name"] == "insights-prompt-abc123def456"
+    assert len(read_json(run_dir / "traffic-receipt.json")["outcomes"]) == 11
+    assert final["feedback_url"].startswith(
+        "https://msdata.visualstudio.com/Vienna/_workitems/create/Bug"
+    )
+
+
 def test_cleanup_scratch_uses_receipt_owned_group(
     monkeypatch,
     tmp_path,
@@ -488,6 +605,112 @@ def test_cleanup_scratch_uses_receipt_owned_group(
             "owner_object_id": azure_context.user_object_id,
         }
     ]
+
+
+def test_cleanup_existing_removes_only_receipt_owned_sample_agent(
+    monkeypatch,
+    tmp_path,
+    make_config,
+    make_resources,
+    make_deployment,
+    azure_context,
+    azure_ids,
+    run_id,
+) -> None:
+    config = make_config(
+        mode="existing",
+        location=None,
+        agent_type="prompt",
+        project_resource_id=azure_ids["project"],
+        agent_name=None,
+        model_deployment_name="gpt-5.4",
+        application_insights_resource_id=azure_ids["app_insights"],
+        create_sample_agent=True,
+    )
+    resources = make_resources()
+    deployment = make_deployment(
+        name="insights-prompt-abc123def456",
+        version="1",
+    )
+    plan = orchestrator.OnboardingPlan.create(
+        run_id=run_id,
+        config=config,
+        context=azure_context,
+        mutations=[
+            orchestrator.Mutation(
+                "create_sample_agent_version",
+                deployment.name,
+                {"agent_type": "prompt", "immutable": True},
+            )
+        ],
+        expected={"first_result": "nonempty"},
+    )
+    run_dir = tmp_path / run_id
+    orchestrator.write_json_atomic(run_dir / "plan.json", plan.as_dict())
+    orchestrator.write_json_atomic(
+        run_dir / "provisioning-receipt.json",
+        {
+            "status": "complete",
+            "project": asdict(resources),
+            "agent": asdict(deployment),
+            "agent_created": True,
+            "created_connection_ids": [],
+            "created_role_assignments": [],
+        },
+    )
+    orchestrator.write_json_atomic(
+        run_dir / "insights-receipt.json",
+        {
+            "status": "complete",
+            "monitor_id": "monitor-created",
+            "monitor_created": True,
+        },
+    )
+    monkeypatch.setattr(
+        orchestrator,
+        "select_context",
+        lambda _cli, _subscription_id: azure_context,
+    )
+    deleted_monitors: list[str] = []
+
+    class CleanupInsights:
+        def __init__(self, **_kwargs) -> None:
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args) -> None:
+            pass
+
+        def get_monitor(self, monitor_id):
+            return {
+                "id": monitor_id,
+                "agent_name": deployment.name,
+            }
+
+        def delete_monitor(self, monitor_id):
+            deleted_monitors.append(monitor_id)
+
+    monkeypatch.setattr(orchestrator, "AgentInsightsClient", CleanupInsights)
+    monkeypatch.setattr(orchestrator, "_credential", lambda _context: object())
+    monkeypatch.setattr(orchestrator, "project_client", lambda *_args: object())
+    deleted_agents: list[tuple[object, object, str]] = []
+    monkeypatch.setattr(
+        orchestrator,
+        "delete_owned_agent",
+        lambda project, *, deployment, run_id: deleted_agents.append(
+            (project, deployment, run_id)
+        ),
+    )
+
+    result = orchestrator.cleanup(run_dir, cli=object())
+
+    assert result["status"] == "complete"
+    assert deleted_monitors == ["monitor-created"]
+    assert len(deleted_agents) == 1
+    assert deleted_agents[0][1] == deployment
+    assert deleted_agents[0][2] == run_id
 
 
 def test_cleanup_rejects_changed_user_context(

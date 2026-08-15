@@ -264,6 +264,7 @@ class FakeAgentOperations:
     def __init__(self, versions=None) -> None:
         self.versions = list(versions or [])
         self.created: list[dict[str, object]] = []
+        self.deleted: list[tuple[str, bool | None]] = []
 
     def list_versions(self, *_args, **_kwargs):
         return self.versions
@@ -275,6 +276,9 @@ class FakeAgentOperations:
     def create_version_from_code(self, **kwargs):
         self.created.append(kwargs)
         return SimpleNamespace(version="8")
+
+    def delete(self, agent_name, *, force=None):
+        self.deleted.append((agent_name, force))
 
 
 def test_create_prompt_and_hosted_sample_agents(
@@ -348,3 +352,45 @@ def test_create_sample_agent_reuses_only_exact_owned_version(run_id) -> None:
             model="model",
         )
     assert excinfo.value.code == "agent_ownership_mismatch"
+
+
+def test_delete_owned_agent_requires_exact_single_owned_version(run_id) -> None:
+    definition = SimpleNamespace(kind="prompt")
+    owned = SimpleNamespace(
+        version="3",
+        definition=definition,
+        metadata={
+            "agent_insights_quickstart_owner": "agent-insights-quickstart",
+            "agent_insights_quickstart_run_id": run_id,
+        },
+    )
+    operations = FakeAgentOperations([owned])
+    project = SimpleNamespace(agents=operations)
+
+    agents.delete_owned_agent(
+        project,
+        deployment=agents.AgentDeployment(
+            name="insights-prompt-abc123def456",
+            version="3",
+            kind="prompt",
+        ),
+        run_id=run_id,
+    )
+
+    assert operations.deleted == [("insights-prompt-abc123def456", True)]
+
+    operations = FakeAgentOperations(
+        [owned, SimpleNamespace(version="4", definition=definition, metadata={})]
+    )
+    with pytest.raises(OnboardingError) as mismatch:
+        agents.delete_owned_agent(
+            SimpleNamespace(agents=operations),
+            deployment=agents.AgentDeployment(
+                name="insights-prompt-abc123def456",
+                version="3",
+                kind="prompt",
+            ),
+            run_id=run_id,
+        )
+    assert mismatch.value.code == "agent_cleanup_target_mismatch"
+    assert operations.deleted == []
