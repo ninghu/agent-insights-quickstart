@@ -245,11 +245,20 @@ class AgentInsightsClient:
                 )
             time.sleep(30)
 
-    def list_insights(self, monitor_id: str) -> list[Mapping[str, Any]]:
+    def list_insights(
+        self,
+        monitor_id: str,
+        *,
+        include_details: bool = False,
+    ) -> list[Mapping[str, Any]]:
         _, payload = self._request(
             "GET",
             f"/agent_insight_monitors/{monitor_id}/insights",
-            params={"limit": 20, "order": "desc"},
+            params={
+                "limit": 20,
+                "order": "desc",
+                "include_details": str(include_details).lower(),
+            },
         )
         data = payload.get("data") if isinstance(payload, Mapping) else None
         if not isinstance(data, list) or not all(isinstance(item, Mapping) for item in data):

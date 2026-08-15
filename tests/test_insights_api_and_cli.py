@@ -93,6 +93,19 @@ def test_agent_insights_client_authenticates_and_validates_payloads(monkeypatch)
     assert excinfo.value.code == "invalid_monitor_list"
 
 
+def test_agent_insights_client_can_request_detailed_fixes(monkeypatch) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.params["include_details"] == "true"
+        return httpx.Response(200, json={"data": []})
+
+    _patch_client(monkeypatch, handler)
+    with AgentInsightsClient(
+        project_endpoint="https://demo.services.ai.azure.com/api/projects/demo",
+        credential=FakeCredential(),
+    ) as client:
+        assert client.list_insights("monitor", include_details=True) == []
+
+
 def test_agent_insights_probe_status_mapping_and_errors(monkeypatch) -> None:
     def forbidden(_request: httpx.Request) -> httpx.Response:
         return httpx.Response(403, json={"error": "denied"}, headers={"request-id": "req-403"})

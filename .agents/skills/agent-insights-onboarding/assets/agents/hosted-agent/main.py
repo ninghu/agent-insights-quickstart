@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import os
 import re
+import time
 
 from azure.ai.agentserver.responses import (
     CreateResponse,
@@ -14,11 +15,13 @@ from opentelemetry import trace
 from opentelemetry.trace import SpanKind, Status, StatusCode
 
 _MODEL_DEPLOYMENT_NAME = os.getenv("AZURE_AI_MODEL_DEPLOYMENT_NAME", "")
+_LOOKUP_ORDER_TIMEOUT_MS = int(os.getenv("LOOKUP_ORDER_TIMEOUT_MS", "20"))
+_SLOW_LOOKUP_LATENCY_MS = 80
 _FAULT_TEXT = (
-    "I could not check that order because the order lookup service is temporarily "
-    "unavailable. Please try again later or contact support."
+    "I could not check that order because the order lookup timed out. "
+    "Please try again later or contact support."
 )
-_EXPECTED_ISSUE_CATEGORY = "lookup_order_dependency_failure"
+_EXPECTED_ISSUE_CATEGORY = "lookup_order_timeout_misconfiguration"
 _ORDER_MESSAGES = {
     "ORDER-1001": "Order ORDER-1001 is processing and is expected to ship in 2 days.",
     "ORDER-1002": "Order ORDER-1002 has shipped and is expected to arrive tomorrow.",
@@ -28,15 +31,20 @@ _ORDER_MESSAGES = {
     "ORDER-1006": (
         "Order ORDER-1006 has been refunded and the refund should post in 3 business days."
     ),
+    "ORDER-9001": "Order ORDER-9001 is waiting for a carrier status refresh.",
+    "ORDER-9002": "Order ORDER-9002 is waiting for a warehouse status refresh.",
+    "ORDER-9003": "Order ORDER-9003 is waiting for a customs status refresh.",
+    "ORDER-9004": "Order ORDER-9004 is waiting for a pickup status refresh.",
+    "ORDER-9005": "Order ORDER-9005 is waiting for a refund status refresh.",
 }
 _TRACER = trace.get_tracer("agent_insights_onboarding.sample_order_status")
-_REQUEST_PATTERN = re.compile(r"^(healthy|fault):", re.IGNORECASE)
+_REQUEST_PATTERN = re.compile(r"^(healthy|slow):", re.IGNORECASE)
 _ORDER_ID_PATTERN = re.compile(r"ORDER-[0-9]{4}", re.IGNORECASE)
 
 app = ResponsesAgentServerHost()
 
 
-class LookupOrderServiceError(RuntimeError):
+class LookupOrderTimeoutError(RuntimeError):
     pass
 
 
@@ -61,18 +69,25 @@ def _lookup_order(sample_mode: str, order_id: str) -> str:
         span.set_attribute("sample.order_id", order_id)
         span.set_attribute("sample.no_retries", True)
         span.set_attribute("sample.issue.category", _EXPECTED_ISSUE_CATEGORY)
+        span.set_attribute("sample.lookup.timeout_ms", _LOOKUP_ORDER_TIMEOUT_MS)
         span.set_attribute(
             "sample.model_deployment_name_present",
             bool(_MODEL_DEPLOYMENT_NAME),
         )
 
-        if sample_mode == "fault":
-            error = LookupOrderServiceError(
-                "Deterministic sample failure for lookup_order dependency tracing."
-            )
-            span.record_exception(error)
-            span.set_status(Status(StatusCode.ERROR, str(error)))
-            raise error
+        if sample_mode == "slow":
+            started = time.monotonic()
+            time.sleep(_SLOW_LOOKUP_LATENCY_MS / 1000)
+            elapsed_ms = round((time.monotonic() - started) * 1000)
+            span.set_attribute("sample.lookup.elapsed_ms", elapsed_ms)
+            if elapsed_ms > _LOOKUP_ORDER_TIMEOUT_MS:
+                error = LookupOrderTimeoutError(
+                    "lookup_order exceeded the configured LOOKUP_ORDER_TIMEOUT_MS "
+                    f"({elapsed_ms}ms observed > {_LOOKUP_ORDER_TIMEOUT_MS}ms configured)."
+                )
+                span.record_exception(error)
+                span.set_status(Status(StatusCode.ERROR, str(error)))
+                raise error
 
         message = _ORDER_MESSAGES.get(order_id)
         if message is None:
@@ -96,13 +111,13 @@ async def handler(
             request,
             text=(
                 "Send one of the sample requests, for example 'healthy: please check "
-                "ORDER-1001' or 'fault: please check ORDER-9001'."
+                "ORDER-1001' or 'slow: please check ORDER-9001'."
             ),
         )
 
     try:
         customer_message = _lookup_order(sample_mode, order_id)
-    except LookupOrderServiceError:
+    except LookupOrderTimeoutError:
         customer_message = _FAULT_TEXT
 
     return TextResponse(context, request, text=customer_message)

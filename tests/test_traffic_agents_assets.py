@@ -18,6 +18,26 @@ def test_traffic_fixtures_have_expected_bounds_for_prompt_and_hosted() -> None:
         assert sum(bool(item["expected_fault"]) for item in scenarios) == 5
 
 
+def test_hosted_faults_expose_a_source_owned_timeout_contract(assets_root) -> None:
+    scenarios = [
+        item
+        for item in traffic._load_scenarios("hosted")
+        if item["expected_fault"]
+    ]
+    source = (
+        assets_root / "agents" / "hosted-agent" / "main.py"
+    ).read_text(encoding="utf-8")
+
+    assert all(str(item["input"]).startswith("slow:") for item in scenarios)
+    assert {
+        item["expected_issue_category"] for item in scenarios
+    } == {"lookup_order_timeout_misconfiguration"}
+    assert 'os.getenv("LOOKUP_ORDER_TIMEOUT_MS", "20")' in source
+    assert "_SLOW_LOOKUP_LATENCY_MS = 80" in source
+    assert "lookup_order exceeded the configured LOOKUP_ORDER_TIMEOUT_MS" in source
+    compile(source, "hosted-agent/main.py", "exec")
+
+
 def test_prompt_tool_outputs_are_deterministic_for_healthy_and_faulty_scenarios() -> None:
     healthy = next(item for item in traffic._load_scenarios("prompt") if not item["expected_fault"])
     faulty = next(item for item in traffic._load_scenarios("prompt") if item["expected_fault"])

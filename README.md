@@ -52,6 +52,10 @@ the number of insights returned, includes a direct Foundry agent-monitor link fo
 reviewing details, identifies cost-bearing resources, and prints an ownership-checked
 cleanup command.
 
+The code-based Hosted sample includes a bounded lookup-timeout misconfiguration. Its
+first successful onboarding must return at least one independently reviewed concrete
+code diff; prose-only output is treated as a demo regression rather than success.
+
 As soon as the first Agent Insights run starts, the CLI prints the same direct portal
 link and explains that the first run may take **10–20 minutes**. Open the link immediately
 to watch progress; the onboarding agent continues monitoring the job and reports the
@@ -98,7 +102,8 @@ for the complete policy and prerequisites.
 
 ## Feedback
 
-Report any bug or improvement suggestion with the
+At the end of onboarding, the agent provides this link. If you find a bug or have an
+improvement suggestion, create a bug with the
 [Agent Insights bug template](https://msdata.visualstudio.com/Vienna/_workitems/create/Bug?templateId=6d5d4dfe-fd55-45f3-b9c9-f7cc2b0e1835&ownerId=5d069bfc-f7ae-4d93-bee7-c94d439a26a7).
 
 <details>

@@ -930,6 +930,58 @@ def _complete_monitor(
     timeout_seconds: float,
     run_started_callback: Callable[[str, str], None] | None = None,
 ) -> tuple[MonitorOutcome, bool]:
+    require_concrete_code_fix = (
+        deployment.kind == "hosted" and bool(deployment.artifact_sha256)
+    )
+
+    def concrete_code_fix_count(insights: Sequence[Mapping[str, Any]]) -> int:
+        count = 0
+        for insight in insights:
+            details = insight.get("details")
+            actions = (
+                details.get("recommended_actions")
+                if isinstance(details, Mapping)
+                else None
+            )
+            proposed_fix = (
+                actions.get("proposed_fix")
+                if isinstance(actions, Mapping)
+                else None
+            )
+            if (
+                isinstance(proposed_fix, Mapping)
+                and proposed_fix.get("kind") == "code_change"
+                and isinstance(proposed_fix.get("changes"), list)
+                and proposed_fix["changes"]
+            ):
+                count += 1
+        return count
+
+    def list_insights() -> list[Mapping[str, Any]]:
+        return (
+            client.list_insights(monitor_id, include_details=True)
+            if require_concrete_code_fix
+            else client.list_insights(monitor_id)
+        )
+
+    def require_demo_code_fix(
+        insights: Sequence[Mapping[str, Any]],
+        insight_run_id: str,
+    ) -> int:
+        count = concrete_code_fix_count(insights)
+        if require_concrete_code_fix and count == 0:
+            raise OnboardingError(
+                "missing_concrete_code_fix",
+                "The code-based Hosted sample produced insights but no validated concrete "
+                "code fix. Preserve the receipts and report this as a demo regression.",
+                {
+                    "monitor_id": monitor_id,
+                    "run_id": insight_run_id,
+                    "insight_count": len(insights),
+                },
+            )
+        return count
+
     def schedule_fields(
         monitor: Mapping[str, Any],
     ) -> tuple[float | None, str | None]:
@@ -955,20 +1007,22 @@ def _complete_monitor(
         )
         monitor_id = str(monitor.get("id") or "")
         if not created and allow_existing_result:
-            insights = client.list_insights(monitor_id)
+            insights = list_insights()
             succeeded_runs = [
                 run
                 for run in client.list_runs(monitor_id)
                 if str(run.get("status") or "").casefold() == "succeeded"
             ]
             if insights and succeeded_runs:
+                reused_run_id = str(succeeded_runs[0].get("id") or "")
+                fix_count = require_demo_code_fix(insights, reused_run_id)
                 final_monitor = monitor
                 if enable_monitor and not bool(monitor.get("enabled")):
                     final_monitor = client.enable_monitor(monitor_id)
                 interval, next_run = schedule_fields(final_monitor)
                 outcome = MonitorOutcome(
                     monitor_id=monitor_id,
-                    run_id=str(succeeded_runs[0].get("id") or ""),
+                    run_id=reused_run_id,
                     insight_ids=tuple(
                         str(item.get("id") or "") for item in insights
                     ),
@@ -978,6 +1032,7 @@ def _complete_monitor(
                         else None
                     ),
                     enabled=bool(final_monitor.get("enabled")),
+                    concrete_code_fix_count=fix_count,
                     run_interval_hours=interval,
                     next_scheduled_run_at=next_run,
                 )
@@ -1009,13 +1064,14 @@ def _complete_monitor(
         run_id=run_id,
         timeout_seconds=timeout_seconds,
     )
-    insights = client.list_insights(monitor_id)
+    insights = list_insights()
     if not insights:
         raise OnboardingError(
             "empty_insights",
             "Agent Insights run succeeded but returned no insights.",
             {"monitor_id": monitor_id, "run_id": run_id},
         )
+    fix_count = require_demo_code_fix(insights, run_id)
     monitor = client.get_monitor(monitor_id)
     if enable_monitor and not bool(monitor.get("enabled")):
         monitor = client.enable_monitor(monitor_id)
@@ -1030,6 +1086,7 @@ def _complete_monitor(
             else None
         ),
         enabled=bool(monitor.get("enabled")),
+        concrete_code_fix_count=fix_count,
         run_interval_hours=interval,
         next_scheduled_run_at=next_run,
     )
@@ -1078,6 +1135,7 @@ def _finalize(
         "monitor": monitor_payload,
         "result_summary": {
             "insight_count": insight_count,
+            "concrete_code_fix_count": monitor.concrete_code_fix_count,
             "message": (
                 f"Agent Insights returned {insight_count} insight"
                 + ("" if insight_count == 1 else "s")

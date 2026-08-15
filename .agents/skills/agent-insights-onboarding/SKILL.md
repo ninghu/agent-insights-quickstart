@@ -123,7 +123,9 @@ reference for the selected path:
    take 10–20 minutes. Keep monitoring the command and continue the workflow; do not
    make the user wait without the portal link. Report other progress without exposing
    subprocess output that the CLI redacted.
-17. Require a final receipt with `status: complete`. Give the user the Foundry portal
+17. Require a final receipt with `status: complete`. For a code-based Hosted sample,
+    also require `result_summary.concrete_code_fix_count >= 1`; prose-only output is a
+    demo regression, not success. Give the user the Foundry portal
     link, first-result insight count, agent/version, monitor/run/insight IDs, cost
     estimate when returned by the service, schedule interval/next run when enabled,
     receipt path, and cleanup command. End with this concise handoff:
@@ -131,9 +133,11 @@ reference for the selected path:
     ```text
     Agent Insights setup complete.
     Insights generated: <insight_count>
+    Concrete code fixes: <concrete_code_fix_count>
     Review details: <agent_insights_portal_url>
     In Foundry, open Monitor > Agent Insights if the link lands on project home.
-    Report bugs or improvement suggestions: <feedback_url>
+    If you find a bug or have an improvement suggestion, create a bug:
+    <feedback_url>
     ```
 
 ## Recovery

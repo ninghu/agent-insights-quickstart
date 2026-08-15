@@ -365,6 +365,7 @@ def test_onboard_scratch_writes_resumable_receipts(
     assert final["monitor"] == {**asdict(monitor), "insight_count": 1}
     assert final["monitor"]["insight_count"] == 1
     assert final["result_summary"]["insight_count"] == 1
+    assert final["result_summary"]["concrete_code_fix_count"] == 0
     assert final["result_summary"]["message"] == (
         "Agent Insights returned 1 insight for the first verified result."
     )
@@ -963,3 +964,77 @@ def test_new_insights_run_reports_portal_handoff_before_waiting(
     assert created is True
     assert outcome.run_id == "run-new"
     assert read_json(tmp_path / "insights-state.json")["status"] == "started"
+
+
+@pytest.mark.parametrize(("fix_kind", "expected_error"), (("code_change", None), ("prose", True)))
+def test_hosted_sample_requires_a_validated_concrete_code_fix(
+    tmp_path,
+    make_deployment,
+    fix_kind,
+    expected_error,
+) -> None:
+    class HostedFixClient:
+        def get_or_create_monitor(self, **_kwargs):
+            return {"id": "monitor-hosted", "enabled": False}, True
+
+        def create_run(self, _monitor_id, **_kwargs):
+            return {"id": "run-hosted"}
+
+        def wait_run(self, **_kwargs):
+            return {"status": "succeeded"}
+
+        def list_insights(self, _monitor_id, *, include_details=False):
+            assert include_details is True
+            proposed_fix = (
+                {
+                    "kind": "code_change",
+                    "changes": [{"path": "main.py", "diff": "diff"}],
+                }
+                if fix_kind == "code_change"
+                else {"kind": "prose", "text": "Investigate the timeout."}
+            )
+            return [
+                {
+                    "id": "insight-hosted",
+                    "details": {
+                        "recommended_actions": {
+                            "proposed_fix": proposed_fix,
+                        }
+                    },
+                }
+            ]
+
+        def get_monitor(self, _monitor_id):
+            return {"id": "monitor-hosted", "enabled": False}
+
+    deployment = make_deployment(
+        name="insights-hosted-demo",
+        kind="hosted",
+        artifact_sha256="a" * 64,
+    )
+    if expected_error:
+        with pytest.raises(orchestrator.OnboardingError) as missing_fix:
+            orchestrator._complete_monitor(
+                client=HostedFixClient(),
+                run_dir=tmp_path,
+                deployment=deployment,
+                model_deployment_name="gpt-5.6-terra",
+                enable_monitor=False,
+                lookback_hours=168,
+                allow_existing_result=False,
+                timeout_seconds=10,
+            )
+        assert missing_fix.value.code == "missing_concrete_code_fix"
+        return
+
+    outcome, _ = orchestrator._complete_monitor(
+        client=HostedFixClient(),
+        run_dir=tmp_path,
+        deployment=deployment,
+        model_deployment_name="gpt-5.6-terra",
+        enable_monitor=False,
+        lookback_hours=168,
+        allow_existing_result=False,
+        timeout_seconds=10,
+    )
+    assert outcome.concrete_code_fix_count == 1
