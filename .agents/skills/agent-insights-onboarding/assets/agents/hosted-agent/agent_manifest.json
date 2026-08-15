@@ -1,0 +1,28 @@
+{
+  "name": "sample-order-status-hosted-agent",
+  "entry_point": "python main.py",
+  "runtime": "python3.13",
+  "protocol": "responses-1.0.0",
+  "server_library": "azure-ai-agentserver-responses",
+  "dependency_resolution": {
+    "mode": "pip",
+    "requirements_file": "requirements.txt",
+    "remote_build_upload": "flat-folder-zip",
+    "docker_required": false,
+    "acr_required": false
+  },
+  "environment": {
+    "reads": [
+      "AZURE_AI_MODEL_DEPLOYMENT_NAME"
+    ],
+    "notes": "This sample reads the model deployment name from environment but does not require a model call for the deterministic onboarding traffic."
+  },
+  "expected_request_counts": {
+    "healthy": 6,
+    "fault": 5,
+    "total": 11
+  },
+  "expected_issue_category": "lookup_order_dependency_failure",
+  "healthy_requests": "healthy_requests.json",
+  "faulty_requests": "faulty_requests.json"
+}

@@ -1,0 +1,379 @@
+from __future__ import annotations
+
+import subprocess
+
+import pytest
+from insights_onboarding import azure_cli as azure_cli_module
+from insights_onboarding.azure_cli import AzureCli, CommandOutput
+from insights_onboarding.discovery import (
+    account_id_from_project,
+    check_azure_cli_version,
+    derive_project_endpoint,
+    linked_workspace_id,
+    list_app_insights_connections,
+    model_is_available,
+    model_quota_available,
+    parse_version,
+)
+from insights_onboarding.errors import OnboardingError
+from insights_onboarding.permissions import (
+    FOUNDRY_USER,
+    RequiredAssignment,
+    action_allowed,
+    create_assignment,
+    missing_assignments,
+    require_actions,
+    role_guid,
+)
+
+
+class StubCli:
+    def __init__(self, *, json_values=None, rest_values=None) -> None:
+        self.json_values = list(json_values or [])
+        self.rest_values = list(rest_values or [])
+        self.json_calls: list[tuple[list[str], dict[str, object]]] = []
+        self.rest_calls: list[tuple[str, str, bool]] = []
+
+    def json(self, arguments, **kwargs):
+        self.json_calls.append((list(arguments), dict(kwargs)))
+        return self.json_values.pop(0)
+
+    def rest(self, *, method: str, url: str, allow_failure: bool = False, **_kwargs):
+        self.rest_calls.append((method, url, allow_failure))
+        return self.rest_values.pop(0)
+
+
+def test_azure_cli_json_successfully_parses_stdout() -> None:
+    calls: list[tuple[list[str], float]] = []
+
+    def executor(command, timeout):
+        calls.append((list(command), timeout))
+        return CommandOutput(0, '{"ok": true, "count": 2}', "")
+
+    value = AzureCli(executor=executor).json(["group", "exists", "--name", "demo"], timeout=12)
+
+    assert value == {"ok": True, "count": 2}
+    assert calls == [
+        (["az", "group", "exists", "--name", "demo", "--output", "json"], 12),
+    ]
+
+
+def test_azure_cli_rest_accepts_empty_delete_response() -> None:
+    def executor(_command, _timeout):
+        return CommandOutput(0, "", "")
+
+    result = AzureCli(executor=executor).rest(
+        method="delete",
+        url=(
+            "https://management.azure.com/subscriptions/"
+            "11111111-1111-1111-1111-111111111111"
+            "/resourceGroups/demo?api-version=2024-11-01"
+        ),
+    )
+
+    assert result is None
+
+
+def test_azure_cli_failure_redacts_stderr_and_sensitive_arguments() -> None:
+    secret = "topsecretvalue123456"
+
+    def executor(_command, _timeout):
+        return CommandOutput(
+            2,
+            "",
+            f"Authorization: {secret}; Bearer bearersecret1234567890; "
+            "AccountKey=abcdef1234567890; "
+            "https://example.test/?sig=abcdef1234567890",
+        )
+
+    cli = AzureCli(executor=executor)
+    with pytest.raises(OnboardingError) as excinfo:
+        cli.run(
+            [
+                "rest",
+                "--headers",
+                f"Authorization={secret}",
+                "--body",
+                '{"token":"abcdef1234567890"}',
+                "--client-secret",
+                "abcdef1234567890",
+            ]
+        )
+
+    details = excinfo.value.details
+    assert excinfo.value.code == "azure_cli_failed"
+    assert details["command"] == [
+        "az",
+        "rest",
+        "--headers",
+        "******",
+        "--body",
+        "******",
+        "--client-secret",
+        "******",
+    ]
+    assert secret not in details["stderr"]
+    assert "bearersecret1234567890" not in details["stderr"]
+    assert "abcdef1234567890" not in details["stderr"]
+    assert "******" in details["stderr"]
+
+
+def test_azure_cli_invalid_json_missing_cli_and_timeout(monkeypatch) -> None:
+    cli = AzureCli(executor=lambda _command, _timeout: CommandOutput(0, "{", ""))
+    with pytest.raises(OnboardingError) as invalid_json:
+        cli.json(["version"])
+    assert invalid_json.value.code == "invalid_azure_cli_json"
+
+    def missing(*_args, **_kwargs):
+        raise FileNotFoundError("az")
+
+    monkeypatch.setattr(azure_cli_module.subprocess, "run", missing)
+    with pytest.raises(OnboardingError) as missing_cli:
+        azure_cli_module._subprocess_executor(["az"], 1)
+    assert missing_cli.value.code == "azure_cli_missing"
+
+    def timeout(*_args, **_kwargs):
+        raise subprocess.TimeoutExpired(cmd=["az"], timeout=1)
+
+    monkeypatch.setattr(azure_cli_module.subprocess, "run", timeout)
+    with pytest.raises(OnboardingError) as timed_out:
+        azure_cli_module._subprocess_executor(["az"], 1)
+    assert timed_out.value.code == "azure_cli_timeout"
+
+
+def test_permission_matching_and_assignment_identity(azure_ids: dict[str, str]) -> None:
+    required = RequiredAssignment(
+        principal_id="44444444-4444-4444-4444-444444444444",
+        principal_type="ServicePrincipal",
+        role=FOUNDRY_USER,
+        scope=f"{azure_ids['account']}/",
+    )
+    same = RequiredAssignment(
+        principal_id=required.principal_id.upper(),
+        principal_type="ServicePrincipal",
+        role=FOUNDRY_USER,
+        scope=azure_ids["account"].upper(),
+    )
+    assert required.assignment_id == same.assignment_id
+    assert role_guid(
+        "/subscriptions/x/providers/Microsoft.Authorization/roleDefinitions/"
+        "53ca6127-db72-4b80-b1b0-d745d6d5456d"
+    ) == FOUNDRY_USER.definition_id
+
+    permissions = [
+        {
+            "actions": ["Microsoft.Authorization/*/write", "Microsoft.Insights/*/read"],
+            "notActions": ["Microsoft.Authorization/roleAssignments/delete"],
+        }
+    ]
+    assert action_allowed(permissions, "Microsoft.Authorization/roleAssignments/write")
+    assert not action_allowed(permissions, "Microsoft.Authorization/roleAssignments/delete")
+
+    with pytest.raises(OnboardingError) as excinfo:
+        require_actions(
+            permissions,
+            [
+                "Microsoft.Authorization/roleAssignments/write",
+                "Microsoft.Authorization/roleAssignments/delete",
+            ],
+            scope=azure_ids["account"],
+        )
+    assert excinfo.value.code == "insufficient_preflight_permission"
+    assert excinfo.value.details["missing_actions"] == [
+        "Microsoft.Authorization/roleAssignments/delete"
+    ]
+
+
+def test_missing_assignments_uses_inherited_results_and_create_is_exact(
+    azure_ids: dict[str, str],
+) -> None:
+    required = RequiredAssignment(
+        principal_id="44444444-4444-4444-4444-444444444444",
+        principal_type="User",
+        role=FOUNDRY_USER,
+        scope=azure_ids["project"],
+    )
+    cli = StubCli(
+        json_values=[
+            [
+                {
+                    "principalId": required.principal_id,
+                    "roleDefinitionId": (
+                        "/subscriptions/x/providers/Microsoft.Authorization/roleDefinitions/"
+                        f"{required.role.definition_id}"
+                    ),
+                    "scope": azure_ids["account"],
+                }
+            ]
+        ]
+    )
+
+    assert missing_assignments(cli, [required]) == []
+    assert "--include-inherited" in cli.json_calls[0][0]
+
+    exact = StubCli(
+        json_values=[
+            {
+                "id": "/subscriptions/x/providers/Microsoft.Authorization/roleAssignments/1",
+                "principalId": required.principal_id,
+                "roleDefinitionId": required.role.definition_id,
+                "scope": required.scope,
+            }
+        ]
+    )
+    created = create_assignment(exact, required)
+    assert created["principalId"] == required.principal_id
+
+    mismatch = StubCli(
+        json_values=[
+            {
+                "principalId": required.principal_id,
+                "roleDefinitionId": required.role.definition_id,
+                "scope": azure_ids["account"],
+            }
+        ]
+    )
+    with pytest.raises(OnboardingError) as bad_scope:
+        create_assignment(mismatch, required)
+    assert bad_scope.value.code == "role_assignment_mismatch"
+
+
+def test_discovery_helpers_parse_versions_connections_and_models(
+    azure_ids: dict[str, str],
+) -> None:
+    assert parse_version("azure-cli                         2.80.1") == (2, 80, 1)
+    assert derive_project_endpoint(azure_ids["project"]) == (
+        "https://demo-account.services.ai.azure.com/api/projects/demo-project"
+    )
+    assert account_id_from_project(azure_ids["project"]) == azure_ids["account"]
+
+    version_cli = StubCli(json_values=[{"azure-cli": "2.80.1"}])
+    assert check_azure_cli_version(version_cli) == "2.80.1"
+
+    stale_cli = StubCli(json_values=[{"azure-cli": "2.79.9"}])
+    with pytest.raises(OnboardingError) as stale:
+        check_azure_cli_version(stale_cli)
+    assert stale.value.code == "azure_cli_too_old"
+
+    connections_cli = StubCli(
+        rest_values=[
+            {
+                "value": [
+                    {
+                        "id": "conn-1",
+                        "name": "appi-1",
+                        "properties": {
+                            "category": "AppInsights",
+                            "metadata": {"ResourceId": azure_ids["app_insights"]},
+                        },
+                    },
+                    {
+                        "id": "conn-2",
+                        "name": "appi-2",
+                        "properties": {
+                            "category": "AppInsights",
+                            "metadata": {"resourceId": azure_ids["app_insights"]},
+                        },
+                    },
+                    {"id": "skip-me", "properties": {"category": "Storage"}},
+                ]
+            }
+        ]
+    )
+    parsed = list_app_insights_connections(connections_cli, azure_ids["project"])
+    assert [item["id"] for item in parsed] == ["conn-1", "conn-2"]
+    assert parsed[0]["resource_id"] == azure_ids["app_insights"]
+
+    workspace = linked_workspace_id(
+        {"properties": {"workspaceResourceId": azure_ids["workspace"]}}
+    )
+    assert workspace == azure_ids["workspace"]
+
+    model_cli = StubCli(
+        json_values=[
+            [
+                {
+                    "model": {
+                        "name": "gpt-4.1-mini",
+                        "version": "2025-04-14",
+                        "format": "OpenAI",
+                    },
+                    "skus": [{"name": "GlobalStandard"}],
+                },
+                {
+                    "name": "other-model",
+                    "version": "1",
+                    "format": "OpenAI",
+                },
+            ]
+        ]
+    )
+    assert model_is_available(
+        model_cli,
+        location="westus3",
+        model_name="gpt-4.1-mini",
+        model_version="2025-04-14",
+        model_format="OpenAI",
+        sku_name="GlobalStandard",
+    )
+    assert not model_is_available(
+        StubCli(
+            json_values=[
+                [
+                    {
+                        "model": {
+                            "name": "gpt-4.1-mini",
+                            "version": "2025-04-14",
+                            "format": "OpenAI",
+                        },
+                        "skus": [{"name": "Standard"}],
+                    }
+                ]
+            ]
+        ),
+        location="westus3",
+        model_name="gpt-4.1-mini",
+        model_version="2025-04-14",
+        model_format="OpenAI",
+        sku_name="GlobalStandard",
+    )
+
+
+def test_model_quota_requires_account_and_model_headroom() -> None:
+    available = [
+        {
+            "name": {"value": "OpenAI.S0.AccountCount"},
+            "currentValue": 1,
+            "limit": 3,
+        },
+        {
+            "name": {"value": "OpenAI.GlobalStandard.gpt4.1-mini"},
+            "currentValue": 10,
+            "limit": 20,
+        },
+    ]
+    assert model_quota_available(
+        StubCli(json_values=[available]),
+        location="westus3",
+        model_name="gpt-4.1-mini",
+        model_format="OpenAI",
+        sku_name="GlobalStandard",
+        capacity=1,
+    )
+
+    exhausted = [
+        available[0],
+        {
+            "name": {"value": "OpenAI.GlobalStandard.gpt4.1-mini"},
+            "currentValue": 20,
+            "limit": 20,
+        },
+    ]
+    assert not model_quota_available(
+        StubCli(json_values=[exhausted]),
+        location="westus3",
+        model_name="gpt-4.1-mini",
+        model_format="OpenAI",
+        sku_name="GlobalStandard",
+        capacity=1,
+    )

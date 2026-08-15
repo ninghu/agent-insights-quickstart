@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "scenario": "sample-order-status-agent",
+  "expected_request_counts": {
+    "healthy": 6,
+    "fault": 5,
+    "total": 11
+  },
+  "expected_issue_category": "lookup_order_dependency_failure",
+  "agents": {
+    "prompt_agent": {
+      "type": "foundry_prompt_agent",
+      "path": "prompt-agent",
+      "entry_point": null,
+      "runtime": "platform-managed",
+      "protocol": "prompt-agent-definition",
+      "dependency_resolution": "Tool execution is supplied by the onboarding orchestration. The lookup_order tool must be called exactly once with no retries.",
+      "healthy_requests": "prompt-agent\\healthy_requests.json",
+      "faulty_requests": "prompt-agent\\faulty_requests.json"
+    },
+    "hosted_agent": {
+      "type": "hosted_agent_source",
+      "path": "hosted-agent",
+      "entry_point": "python main.py",
+      "runtime": "python3.13",
+      "protocol": "responses-1.0.0",
+      "dependency_resolution": "Upload this flat folder with azure-ai-projects>=2.3.0 source-code remote build. Resolve runtime packages from hosted-agent\\requirements.txt. No Docker, ACR, or embedded secrets.",
+      "healthy_requests": "hosted-agent\\healthy_requests.json",
+      "faulty_requests": "hosted-agent\\faulty_requests.json"
+    }
+  }
+}

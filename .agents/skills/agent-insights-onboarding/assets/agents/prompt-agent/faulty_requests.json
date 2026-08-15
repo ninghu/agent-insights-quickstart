@@ -1,0 +1,62 @@
+[
+  {
+    "id": "fault-001",
+    "input": "fault: please check ORDER-9001",
+    "expected_tool_name": "lookup_order",
+    "expected_tool_arguments": {
+      "order_id": "ORDER-9001",
+      "sample_mode": "fault"
+    },
+    "expected_user_reply": "I could not check that order because the order lookup service is temporarily unavailable. Please try again later or contact support.",
+    "expected_span_name": "lookup_order",
+    "expected_issue_category": "lookup_order_dependency_failure"
+  },
+  {
+    "id": "fault-002",
+    "input": "fault: order status for ORDER-9002",
+    "expected_tool_name": "lookup_order",
+    "expected_tool_arguments": {
+      "order_id": "ORDER-9002",
+      "sample_mode": "fault"
+    },
+    "expected_user_reply": "I could not check that order because the order lookup service is temporarily unavailable. Please try again later or contact support.",
+    "expected_span_name": "lookup_order",
+    "expected_issue_category": "lookup_order_dependency_failure"
+  },
+  {
+    "id": "fault-003",
+    "input": "fault: where is ORDER-9003",
+    "expected_tool_name": "lookup_order",
+    "expected_tool_arguments": {
+      "order_id": "ORDER-9003",
+      "sample_mode": "fault"
+    },
+    "expected_user_reply": "I could not check that order because the order lookup service is temporarily unavailable. Please try again later or contact support.",
+    "expected_span_name": "lookup_order",
+    "expected_issue_category": "lookup_order_dependency_failure"
+  },
+  {
+    "id": "fault-004",
+    "input": "fault: check ORDER-9004",
+    "expected_tool_name": "lookup_order",
+    "expected_tool_arguments": {
+      "order_id": "ORDER-9004",
+      "sample_mode": "fault"
+    },
+    "expected_user_reply": "I could not check that order because the order lookup service is temporarily unavailable. Please try again later or contact support.",
+    "expected_span_name": "lookup_order",
+    "expected_issue_category": "lookup_order_dependency_failure"
+  },
+  {
+    "id": "fault-005",
+    "input": "fault: help with ORDER-9005",
+    "expected_tool_name": "lookup_order",
+    "expected_tool_arguments": {
+      "order_id": "ORDER-9005",
+      "sample_mode": "fault"
+    },
+    "expected_user_reply": "I could not check that order because the order lookup service is temporarily unavailable. Please try again later or contact support.",
+    "expected_span_name": "lookup_order",
+    "expected_issue_category": "lookup_order_dependency_failure"
+  }
+]

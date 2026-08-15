@@ -1,0 +1,56 @@
+[build-system]
+requires = ["setuptools>=80"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agent-insights-quickstart"
+version = "0.1.0"
+description = "Guided Microsoft Foundry Agent Insights onboarding"
+readme = "README.md"
+requires-python = ">=3.13"
+license = "MIT"
+authors = [{ name = "Billy Hu" }]
+dependencies = [
+  "azure-ai-projects==2.3.0",
+  "azure-identity==1.25.3",
+  "azure-monitor-query==1.4.1",
+  "httpx==0.28.1",
+  "opentelemetry-api==1.44.0",
+  "opentelemetry-sdk==1.44.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "mypy==1.20.2",
+  "pip-tools==7.5.3",
+  "pytest==8.4.2",
+  "pytest-cov==7.1.0",
+  "ruff==0.16.2",
+]
+
+[project.scripts]
+agent-insights-onboard = "insights_onboarding.cli:main"
+
+[tool.setuptools]
+package-dir = { "" = ".agents/skills/agent-insights-onboarding/scripts" }
+
+[tool.setuptools.packages.find]
+where = [".agents/skills/agent-insights-onboarding/scripts"]
+include = ["insights_onboarding*"]
+
+[tool.pytest.ini_options]
+addopts = "-ra --strict-markers --strict-config"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+packages = ["insights_onboarding"]
+mypy_path = ".agents/skills/agent-insights-onboarding/scripts"

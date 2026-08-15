@@ -1,0 +1,29 @@
+{
+  "type": "function",
+  "name": "lookup_order",
+  "description": "Return a deterministic sample order state for healthy traffic or raise a deterministic lookup failure for fault traffic.",
+  "strict": true,
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "order_id": {
+        "type": "string",
+        "description": "Sample order id such as ORDER-1001 or ORDER-9001.",
+        "pattern": "^ORDER-[0-9]{4}$"
+      },
+      "sample_mode": {
+        "type": "string",
+        "description": "Select healthy for deterministic success or fault for deterministic tool failure.",
+        "enum": [
+          "healthy",
+          "fault"
+        ]
+      }
+    },
+    "required": [
+      "order_id",
+      "sample_mode"
+    ],
+    "additionalProperties": false
+  }
+}

@@ -1,0 +1,68 @@
+[
+  {
+    "id": "healthy-001",
+    "input": "healthy: please check ORDER-1001",
+    "expected_tool_name": "lookup_order",
+    "expected_tool_arguments": {
+      "order_id": "ORDER-1001",
+      "sample_mode": "healthy"
+    },
+    "expected_user_reply": "Order ORDER-1001 is processing and is expected to ship in 2 days.",
+    "expected_span_name": "lookup_order"
+  },
+  {
+    "id": "healthy-002",
+    "input": "healthy: order status for ORDER-1002",
+    "expected_tool_name": "lookup_order",
+    "expected_tool_arguments": {
+      "order_id": "ORDER-1002",
+      "sample_mode": "healthy"
+    },
+    "expected_user_reply": "Order ORDER-1002 has shipped and is expected to arrive tomorrow.",
+    "expected_span_name": "lookup_order"
+  },
+  {
+    "id": "healthy-003",
+    "input": "healthy: where is ORDER-1003",
+    "expected_tool_name": "lookup_order",
+    "expected_tool_arguments": {
+      "order_id": "ORDER-1003",
+      "sample_mode": "healthy"
+    },
+    "expected_user_reply": "Order ORDER-1003 is ready for pickup at the sample support desk.",
+    "expected_span_name": "lookup_order"
+  },
+  {
+    "id": "healthy-004",
+    "input": "healthy: check ORDER-1004",
+    "expected_tool_name": "lookup_order",
+    "expected_tool_arguments": {
+      "order_id": "ORDER-1004",
+      "sample_mode": "healthy"
+    },
+    "expected_user_reply": "Order ORDER-1004 was delivered earlier today.",
+    "expected_span_name": "lookup_order"
+  },
+  {
+    "id": "healthy-005",
+    "input": "healthy: help with ORDER-1005",
+    "expected_tool_name": "lookup_order",
+    "expected_tool_arguments": {
+      "order_id": "ORDER-1005",
+      "sample_mode": "healthy"
+    },
+    "expected_user_reply": "Order ORDER-1005 is on hold while the payment check completes.",
+    "expected_span_name": "lookup_order"
+  },
+  {
+    "id": "healthy-006",
+    "input": "healthy: look up ORDER-1006",
+    "expected_tool_name": "lookup_order",
+    "expected_tool_arguments": {
+      "order_id": "ORDER-1006",
+      "sample_mode": "healthy"
+    },
+    "expected_user_reply": "Order ORDER-1006 has been refunded and the refund should post in 3 business days.",
+    "expected_span_name": "lookup_order"
+  }
+]

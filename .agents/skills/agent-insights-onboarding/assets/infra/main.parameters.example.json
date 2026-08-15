@@ -1,0 +1,49 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "namePrefix": {
+      "value": "agiqs"
+    },
+    "nameSuffix": {
+      "value": "dev001"
+    },
+    "location": {
+      "value": "eastus"
+    },
+    "initiatingUserObjectId": {
+      "value": "00000000-0000-0000-0000-000000000000"
+    },
+    "agentType": {
+      "value": "prompt"
+    },
+    "modelName": {
+      "value": "gpt-4.1-mini"
+    },
+    "modelVersion": {
+      "value": "2025-04-14"
+    },
+    "modelFormat": {
+      "value": "OpenAI"
+    },
+    "modelDeploymentName": {
+      "value": "gpt-4-1-mini"
+    },
+    "modelSkuName": {
+      "value": "GlobalStandard"
+    },
+    "modelSkuCapacity": {
+      "value": 1
+    },
+    "grantPrivilegedMonitoringDataReader": {
+      "value": true
+    },
+    "tags": {
+      "value": {
+        "created-by": "azure-cli",
+        "run-id": "replace-me",
+        "owner-object-id": "00000000-0000-0000-0000-000000000000"
+      }
+    }
+  }
+}
