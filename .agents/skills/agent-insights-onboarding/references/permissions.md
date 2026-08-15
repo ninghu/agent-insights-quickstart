@@ -19,7 +19,7 @@ deterministic assignment ID, and `az role assignment create` command. After an
 administrator applies it, rerun doctor and require `status: ready`; user confirmation
 alone never authorizes scheduling.
 
-## Default remediation policy
+## Default remediation policy for native model deployments
 
 | Principal | Role ID | Scope | Purpose |
 | --- | --- | --- | --- |
@@ -33,7 +33,8 @@ alone never authorizes scheduling.
 | Current user | `dbc9c667-e97f-4491-aee6-90b9cf960190` (Privileged Monitoring Data Reader) | Linked Log Analytics workspace | Protected content reads |
 
 Privileged Monitoring Data Reader is added only when the linked table is protected or
-the target project reports that protected access is required.
+the target project reports that protected access is required. It is not assigned by
+default for the current requests/dependencies trace path.
 
 Role display names are documentation only. The implementation uses IDs, deterministic
 assignment names, principal types, and exact resource IDs, then validates every create

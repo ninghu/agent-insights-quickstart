@@ -51,11 +51,20 @@ def _add_configuration(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--lookback-hours", type=int, default=168)
     parser.add_argument("--invoke-existing-agent", action="store_true")
     parser.add_argument("--enable-existing-monitor", action="store_true")
-    parser.add_argument(
-        "--no-protected-trace-content",
+    protection = parser.add_mutually_exclusive_group()
+    protection.add_argument(
+        "--protected-trace-content",
+        dest="protected_trace_content",
         action="store_true",
-        help="Do not plan Privileged Monitoring Data Reader.",
+        help="Require protected AppGenAIContent access.",
     )
+    protection.add_argument(
+        "--no-protected-trace-content",
+        dest="protected_trace_content",
+        action="store_false",
+        help="Use normal Application Insights query access.",
+    )
+    parser.set_defaults(protected_trace_content=False)
 
 
 def _config(args: argparse.Namespace) -> OnboardingConfig:
@@ -107,7 +116,7 @@ def _config(args: argparse.Namespace) -> OnboardingConfig:
         lookback_hours=args.lookback_hours,
         invoke_existing_agent=args.invoke_existing_agent,
         enable_existing_monitor=args.enable_existing_monitor,
-        protected_trace_content=not args.no_protected_trace_content,
+        protected_trace_content=args.protected_trace_content,
     )
 
 

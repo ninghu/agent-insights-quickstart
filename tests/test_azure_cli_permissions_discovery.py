@@ -26,6 +26,7 @@ from insights_onboarding.errors import OnboardingError
 from insights_onboarding.permissions import (
     COGNITIVE_SERVICES_OPENAI_USER,
     FOUNDRY_USER,
+    PRIVILEGED_MONITORING_DATA_READER,
     RequiredAssignment,
     action_allowed,
     create_assignment,
@@ -357,6 +358,36 @@ def test_project_mi_uses_narrow_model_inference_role(
         and item.scope == azure_ids["project"]
     ]
     assert project_mi_project_roles == [FOUNDRY_USER]
+    assert all(
+        item.role != PRIVILEGED_MONITORING_DATA_READER for item in assignments
+    )
+
+
+def test_protected_trace_content_adds_workspace_roles(
+    azure_ids: dict[str, str],
+) -> None:
+    assignments = required_assignments(
+        current_user_id="33333333-3333-3333-3333-333333333333",
+        project_principal_id="44444444-4444-4444-4444-444444444444",
+        foundry_account_id=azure_ids["account"],
+        project_id=azure_ids["project"],
+        application_insights_id=azure_ids["app_insights"],
+        workspace_id=azure_ids["workspace"],
+        agent_type="prompt",
+        protected_trace_content=True,
+    )
+
+    privileged_assignments = [
+        item
+        for item in assignments
+        if item.role == PRIVILEGED_MONITORING_DATA_READER
+    ]
+    assert {
+        (item.principal_type, item.scope) for item in privileged_assignments
+    } == {
+        ("ServicePrincipal", azure_ids["workspace"]),
+        ("User", azure_ids["workspace"]),
+    }
 
 
 def test_missing_assignments_uses_inherited_results_and_create_is_exact(

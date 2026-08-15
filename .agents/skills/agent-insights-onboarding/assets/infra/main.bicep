@@ -43,7 +43,7 @@ param modelSkuName string = 'GlobalStandard'
 param modelSkuCapacity int = 30
 
 @description('When true, grants Privileged Monitoring Data Reader on the Log Analytics workspace to the project identity and current user.')
-param grantPrivilegedMonitoringDataReader bool = true
+param grantPrivilegedMonitoringDataReader bool = false
 
 @description('Shared tags for every taggable resource. Include created-by, run-id, and owner-object-id.')
 param tags object

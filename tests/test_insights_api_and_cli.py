@@ -52,15 +52,15 @@ def _config_namespace(**overrides: object) -> argparse.Namespace:
         "application_insights_resource_id": None,
         "agent_name": None,
         "model_deployment_name": None,
-        "model_name": "gpt-4.1-mini",
-        "model_version": "2025-04-14",
+        "model_name": "gpt-5.4",
+        "model_version": "2026-03-05",
         "model_format": "OpenAI",
         "model_sku": "GlobalStandard",
-        "model_capacity": 1,
+        "model_capacity": 30,
         "lookback_hours": 168,
         "invoke_existing_agent": False,
         "enable_existing_monitor": False,
-        "no_protected_trace_content": False,
+        "protected_trace_content": False,
     }
     values.update(overrides)
     return argparse.Namespace(**values)
@@ -185,6 +185,32 @@ def test_cleanup_scratch_refuses_unowned_resource_groups(azure_context: object) 
 
 
 def test_cli_configuration_and_timeout_validation(tmp_path) -> None:
+    required_arguments = [
+        "doctor",
+        "--mode",
+        "scratch",
+        "--subscription-id",
+        "00000000-0000-0000-0000-000000000000",
+        "--location",
+        "westus3",
+        "--agent-type",
+        "prompt",
+    ]
+    assert cli_module.parse_args(required_arguments).protected_trace_content is False
+    assert (
+        cli_module.parse_args(
+            [*required_arguments, "--protected-trace-content"]
+        ).protected_trace_content
+        is True
+    )
+    assert cli_module._config(_config_namespace()).protected_trace_content is False
+    assert (
+        cli_module._config(
+            _config_namespace(protected_trace_content=True)
+        ).protected_trace_content
+        is True
+    )
+
     with pytest.raises(OnboardingError) as model_capacity:
         cli_module._config(_config_namespace(model_capacity=0))
     assert model_capacity.value.code == "invalid_model_capacity"

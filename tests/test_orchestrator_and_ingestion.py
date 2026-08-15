@@ -160,7 +160,7 @@ def test_build_plan_adds_identity_mutation_when_project_has_no_principal(
         "enable_project_system_identity",
         "create_app_insights_connections",
     ]
-    assert kinds.count("ensure_role_assignment_after_identity") == 7
+    assert kinds.count("ensure_role_assignment_after_identity") == 5
     assert kinds[-2:] == [
         "create_or_reuse_monitor",
         "create_or_reuse_agent_insights_result",

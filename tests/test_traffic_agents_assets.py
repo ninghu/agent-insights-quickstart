@@ -157,6 +157,7 @@ def test_role_assignment_template_contains_expected_role_guids_and_scopes(assets
         "'Microsoft.Authorization/roleDefinitions', "
         "cognitiveServicesOpenAIUserRoleGuid)"
     ) in " ".join(template.split())
+    assert "param grantPrivilegedMonitoringDataReader bool = false" in template
 
 
 def test_scratch_template_defaults_to_gpt5_capacity(assets_root) -> None:
@@ -164,6 +165,7 @@ def test_scratch_template_defaults_to_gpt5_capacity(assets_root) -> None:
 
     assert "param modelName string = 'gpt-5.4'" in template
     assert "param modelSkuCapacity int = 30" in template
+    assert "param grantPrivilegedMonitoringDataReader bool = false" in template
     assert "gpt-4.1-mini" not in template
 
 

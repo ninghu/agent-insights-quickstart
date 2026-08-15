@@ -55,7 +55,7 @@ cleanup command.
 ## What the workflow changes
 
 The workflow applies only missing assignments at exact resource scopes. It never grants
-Owner. Common assignments include:
+Owner. For the supported native model path, common assignments include:
 
 - Cognitive Services OpenAI User for the project managed identity on the native model
   account

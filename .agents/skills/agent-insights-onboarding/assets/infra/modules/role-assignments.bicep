@@ -26,7 +26,7 @@ param initiatingUserObjectId string
 param agentType string
 
 @description('When true, grant Privileged Monitoring Data Reader on the Log Analytics workspace to the project identity and current user.')
-param grantPrivilegedMonitoringDataReader bool = true
+param grantPrivilegedMonitoringDataReader bool = false
 
 var foundryUserRoleGuid = '53ca6127-db72-4b80-b1b0-d745d6d5456d'
 var foundryProjectManagerRoleGuid = 'eadc314b-1a2d-4efa-be10-5d325db5065e'

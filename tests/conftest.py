@@ -95,7 +95,7 @@ def make_config(subscription_id: str):
             "model_capacity": 1,
             "invoke_existing_agent": False,
             "enable_existing_monitor": False,
-            "protected_trace_content": True,
+            "protected_trace_content": False,
         }
         values.update(overrides)
         return OnboardingConfig(**values)

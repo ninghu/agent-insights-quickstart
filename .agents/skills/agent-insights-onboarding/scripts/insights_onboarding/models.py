@@ -43,7 +43,7 @@ class OnboardingConfig:
     lookback_hours: int = 168
     invoke_existing_agent: bool = False
     enable_existing_monitor: bool = False
-    protected_trace_content: bool = True
+    protected_trace_content: bool = False
 
 
 @dataclass(frozen=True, slots=True)
