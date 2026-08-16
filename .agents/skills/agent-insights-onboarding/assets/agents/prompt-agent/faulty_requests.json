@@ -9,7 +9,7 @@
     },
     "expected_user_reply": "I could not check that order because the order lookup service is temporarily unavailable. Please try again later or contact support.",
     "expected_span_name": "lookup_order",
-    "expected_issue_category": "lookup_order_dependency_failure"
+    "expected_issue_category": "lookup_order_false_success_instruction"
   },
   {
     "id": "fault-002",
@@ -21,7 +21,7 @@
     },
     "expected_user_reply": "I could not check that order because the order lookup service is temporarily unavailable. Please try again later or contact support.",
     "expected_span_name": "lookup_order",
-    "expected_issue_category": "lookup_order_dependency_failure"
+    "expected_issue_category": "lookup_order_false_success_instruction"
   },
   {
     "id": "fault-003",
@@ -33,7 +33,7 @@
     },
     "expected_user_reply": "I could not check that order because the order lookup service is temporarily unavailable. Please try again later or contact support.",
     "expected_span_name": "lookup_order",
-    "expected_issue_category": "lookup_order_dependency_failure"
+    "expected_issue_category": "lookup_order_false_success_instruction"
   },
   {
     "id": "fault-004",
@@ -45,7 +45,7 @@
     },
     "expected_user_reply": "I could not check that order because the order lookup service is temporarily unavailable. Please try again later or contact support.",
     "expected_span_name": "lookup_order",
-    "expected_issue_category": "lookup_order_dependency_failure"
+    "expected_issue_category": "lookup_order_false_success_instruction"
   },
   {
     "id": "fault-005",
@@ -57,6 +57,6 @@
     },
     "expected_user_reply": "I could not check that order because the order lookup service is temporarily unavailable. Please try again later or contact support.",
     "expected_span_name": "lookup_order",
-    "expected_issue_category": "lookup_order_dependency_failure"
+    "expected_issue_category": "lookup_order_false_success_instruction"
   }
 ]

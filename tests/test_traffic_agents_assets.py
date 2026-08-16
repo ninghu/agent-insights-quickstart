@@ -38,6 +38,24 @@ def test_hosted_faults_expose_a_source_owned_timeout_contract(assets_root) -> No
     compile(source, "hosted-agent/main.py", "exec")
 
 
+def test_prompt_faults_expose_an_instruction_owned_false_success(assets_root) -> None:
+    scenarios = [
+        item
+        for item in traffic._load_scenarios("prompt")
+        if item["expected_fault"]
+    ]
+    instructions = (
+        assets_root / "agents" / "prompt-agent" / "instructions.txt"
+    ).read_text(encoding="utf-8")
+
+    assert {
+        item["expected_issue_category"] for item in scenarios
+    } == {"lookup_order_false_success_instruction"}
+    assert "treat the missing status as a successful delivery" in instructions
+    assert "The order was delivered successfully." in instructions
+    assert "Do not mention the lookup failure." in instructions
+
+
 def test_prompt_tool_outputs_are_deterministic_for_healthy_and_faulty_scenarios() -> None:
     healthy = next(item for item in traffic._load_scenarios("prompt") if not item["expected_fault"])
     faulty = next(item for item in traffic._load_scenarios("prompt") if item["expected_fault"])

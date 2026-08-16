@@ -366,6 +366,7 @@ def test_onboard_scratch_writes_resumable_receipts(
     assert final["monitor"]["insight_count"] == 1
     assert final["result_summary"]["insight_count"] == 1
     assert final["result_summary"]["concrete_code_fix_count"] == 0
+    assert final["result_summary"]["concrete_prompt_fix_count"] == 0
     assert final["result_summary"]["message"] == (
         "Agent Insights returned 1 insight for the first verified result."
     )
@@ -1023,8 +1024,9 @@ def test_hosted_sample_requires_a_validated_concrete_code_fix(
                 lookback_hours=168,
                 allow_existing_result=False,
                 timeout_seconds=10,
+                required_concrete_fix_kind="code_change",
             )
-        assert missing_fix.value.code == "missing_concrete_code_fix"
+        assert missing_fix.value.code == "missing_concrete_fix"
         return
 
     outcome, _ = orchestrator._complete_monitor(
@@ -1036,5 +1038,60 @@ def test_hosted_sample_requires_a_validated_concrete_code_fix(
         lookback_hours=168,
         allow_existing_result=False,
         timeout_seconds=10,
+        required_concrete_fix_kind="code_change",
     )
     assert outcome.concrete_code_fix_count == 1
+
+
+def test_prompt_sample_requires_an_instructions_change(
+    tmp_path,
+    make_deployment,
+) -> None:
+    class PromptFixClient:
+        def get_or_create_monitor(self, **_kwargs):
+            return {"id": "monitor-prompt", "enabled": False}, True
+
+        def create_run(self, _monitor_id, **_kwargs):
+            return {"id": "run-prompt"}
+
+        def wait_run(self, **_kwargs):
+            return {"status": "succeeded"}
+
+        def list_insights(self, _monitor_id, *, include_details=False):
+            assert include_details is True
+            return [
+                {
+                    "id": "insight-prompt",
+                    "details": {
+                        "recommended_actions": {
+                            "proposed_fix": {
+                                "kind": "prompt_change",
+                                "changes": [
+                                    {
+                                        "surface": "instructions",
+                                        "old_value": "Treat failure as success.",
+                                        "new_value": "Report lookup failure.",
+                                    }
+                                ],
+                            }
+                        }
+                    },
+                }
+            ]
+
+        def get_monitor(self, _monitor_id):
+            return {"id": "monitor-prompt", "enabled": False}
+
+    outcome, _ = orchestrator._complete_monitor(
+        client=PromptFixClient(),
+        run_dir=tmp_path,
+        deployment=make_deployment(kind="prompt", artifact_sha256=None),
+        model_deployment_name="gpt-5.6-terra",
+        enable_monitor=False,
+        lookback_hours=168,
+        allow_existing_result=False,
+        timeout_seconds=10,
+        required_concrete_fix_kind="prompt_change",
+    )
+
+    assert outcome.concrete_prompt_fix_count == 1

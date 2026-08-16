@@ -56,6 +56,10 @@ The code-based Hosted sample includes a bounded lookup-timeout misconfiguration.
 first successful onboarding must return at least one independently reviewed concrete
 code diff; prose-only output is treated as a demo regression rather than success.
 
+The Prompt sample includes an instruction-owned false-success defect after a failed order
+lookup. Its first successful onboarding must return at least one independently reviewed
+Prompt change against the system instructions; prose-only output is also a demo regression.
+
 As soon as the first Agent Insights run starts, the CLI prints the same direct portal
 link and explains that the first run may take **10–20 minutes**. Open the link immediately
 to watch progress; the onboarding agent continues monitoring the job and reports the

@@ -929,13 +929,13 @@ def _complete_monitor(
     allow_existing_result: bool,
     timeout_seconds: float,
     run_started_callback: Callable[[str, str], None] | None = None,
+    required_concrete_fix_kind: str | None = None,
 ) -> tuple[MonitorOutcome, bool]:
-    require_concrete_code_fix = (
-        deployment.kind == "hosted" and bool(deployment.artifact_sha256)
-    )
-
-    def concrete_code_fix_count(insights: Sequence[Mapping[str, Any]]) -> int:
-        count = 0
+    def concrete_fix_counts(
+        insights: Sequence[Mapping[str, Any]],
+    ) -> tuple[int, int]:
+        code_count = 0
+        prompt_count = 0
         for insight in insights:
             details = insight.get("details")
             actions = (
@@ -950,37 +950,54 @@ def _complete_monitor(
             )
             if (
                 isinstance(proposed_fix, Mapping)
-                and proposed_fix.get("kind") == "code_change"
                 and isinstance(proposed_fix.get("changes"), list)
                 and proposed_fix["changes"]
             ):
-                count += 1
-        return count
+                if proposed_fix.get("kind") == "code_change":
+                    code_count += 1
+                elif (
+                    proposed_fix.get("kind") == "prompt_change"
+                    and any(
+                        isinstance(change, Mapping)
+                        and change.get("surface") == "instructions"
+                        for change in proposed_fix["changes"]
+                    )
+                ):
+                    prompt_count += 1
+        return code_count, prompt_count
 
     def list_insights() -> list[Mapping[str, Any]]:
         return (
             client.list_insights(monitor_id, include_details=True)
-            if require_concrete_code_fix
+            if required_concrete_fix_kind is not None
             else client.list_insights(monitor_id)
         )
 
-    def require_demo_code_fix(
+    def require_demo_concrete_fix(
         insights: Sequence[Mapping[str, Any]],
         insight_run_id: str,
-    ) -> int:
-        count = concrete_code_fix_count(insights)
-        if require_concrete_code_fix and count == 0:
+    ) -> tuple[int, int]:
+        counts = concrete_fix_counts(insights)
+        required_count = (
+            counts[0]
+            if required_concrete_fix_kind == "code_change"
+            else counts[1]
+            if required_concrete_fix_kind == "prompt_change"
+            else 0
+        )
+        if required_concrete_fix_kind is not None and required_count == 0:
             raise OnboardingError(
-                "missing_concrete_code_fix",
-                "The code-based Hosted sample produced insights but no validated concrete "
-                "code fix. Preserve the receipts and report this as a demo regression.",
+                "missing_concrete_fix",
+                "The sample produced insights but no required validated concrete fix. "
+                "Preserve the receipts and report this as a demo regression.",
                 {
                     "monitor_id": monitor_id,
                     "run_id": insight_run_id,
                     "insight_count": len(insights),
+                    "required_kind": required_concrete_fix_kind,
                 },
             )
-        return count
+        return counts
 
     def schedule_fields(
         monitor: Mapping[str, Any],
@@ -1015,7 +1032,10 @@ def _complete_monitor(
             ]
             if insights and succeeded_runs:
                 reused_run_id = str(succeeded_runs[0].get("id") or "")
-                fix_count = require_demo_code_fix(insights, reused_run_id)
+                code_fix_count, prompt_fix_count = require_demo_concrete_fix(
+                    insights,
+                    reused_run_id,
+                )
                 final_monitor = monitor
                 if enable_monitor and not bool(monitor.get("enabled")):
                     final_monitor = client.enable_monitor(monitor_id)
@@ -1032,7 +1052,8 @@ def _complete_monitor(
                         else None
                     ),
                     enabled=bool(final_monitor.get("enabled")),
-                    concrete_code_fix_count=fix_count,
+                    concrete_code_fix_count=code_fix_count,
+                    concrete_prompt_fix_count=prompt_fix_count,
                     run_interval_hours=interval,
                     next_scheduled_run_at=next_run,
                 )
@@ -1071,7 +1092,10 @@ def _complete_monitor(
             "Agent Insights run succeeded but returned no insights.",
             {"monitor_id": monitor_id, "run_id": run_id},
         )
-    fix_count = require_demo_code_fix(insights, run_id)
+    code_fix_count, prompt_fix_count = require_demo_concrete_fix(
+        insights,
+        run_id,
+    )
     monitor = client.get_monitor(monitor_id)
     if enable_monitor and not bool(monitor.get("enabled")):
         monitor = client.enable_monitor(monitor_id)
@@ -1086,7 +1110,8 @@ def _complete_monitor(
             else None
         ),
         enabled=bool(monitor.get("enabled")),
-        concrete_code_fix_count=fix_count,
+        concrete_code_fix_count=code_fix_count,
+        concrete_prompt_fix_count=prompt_fix_count,
         run_interval_hours=interval,
         next_scheduled_run_at=next_run,
     )
@@ -1136,6 +1161,7 @@ def _finalize(
         "result_summary": {
             "insight_count": insight_count,
             "concrete_code_fix_count": monitor.concrete_code_fix_count,
+            "concrete_prompt_fix_count": monitor.concrete_prompt_fix_count,
             "message": (
                 f"Agent Insights returned {insight_count} insight"
                 + ("" if insight_count == 1 else "s")
@@ -1384,6 +1410,13 @@ def onboard(
             allow_existing_result=config.mode == "existing",
             timeout_seconds=insights_timeout_seconds,
             run_started_callback=report_run_started,
+            required_concrete_fix_kind=(
+                "prompt_change"
+                if creates_sample_agent and deployment.kind == "prompt"
+                else "code_change"
+                if creates_sample_agent and deployment.kind == "hosted"
+                else None
+            ),
         )
     return _finalize(
         run_dir=run_dir,
@@ -1468,6 +1501,15 @@ def status(
             lookback_hours=config.lookback_hours,
             allow_existing_result=config.mode == "existing",
             timeout_seconds=insights_timeout_seconds,
+            required_concrete_fix_kind=(
+                "prompt_change"
+                if (config.mode == "scratch" or config.create_sample_agent)
+                and deployment.kind == "prompt"
+                else "code_change"
+                if (config.mode == "scratch" or config.create_sample_agent)
+                and deployment.kind == "hosted"
+                else None
+            ),
         )
     return _finalize(
         run_dir=run_dir,
