@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import concurrent.futures
 import json
 import zipfile
 from types import SimpleNamespace
@@ -141,6 +142,42 @@ def test_prompt_function_continuation_stores_responses() -> None:
     assert session_id is None
     assert len(responses.calls) == 2
     assert all(call["store"] is True for call in responses.calls)
+
+
+def test_prompt_sample_traffic_is_sequential_to_preserve_trace_identity(
+    monkeypatch,
+) -> None:
+    real_executor = concurrent.futures.ThreadPoolExecutor
+    worker_counts: list[int] = []
+
+    def executor(*, max_workers):
+        worker_counts.append(max_workers)
+        return real_executor(max_workers=max_workers)
+
+    monkeypatch.setattr(traffic.concurrent.futures, "ThreadPoolExecutor", executor)
+    monkeypatch.setattr(
+        traffic,
+        "_invoke_prompt",
+        lambda _client, _deployment, scenario: (
+            f"response-{scenario['id']}",
+            None,
+        ),
+    )
+    project = SimpleNamespace(
+        get_openai_client=lambda **_kwargs: object(),
+    )
+
+    outcomes = traffic.generate_sample_traffic(
+        project,
+        AgentDeployment(
+            name="sample-agent",
+            version="1",
+            kind="prompt",
+        ),
+    )
+
+    assert len(outcomes) == 11
+    assert worker_counts == [1]
 
 
 def test_hosted_zip_content_and_hash_are_deterministic(tmp_path, assets_root) -> None:

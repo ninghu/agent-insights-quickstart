@@ -162,3 +162,9 @@ reference for the selected path:
 For changes to this skill, use `doctor` or `onboard --dry-run`. Do not create Azure
 resources or traffic merely to inspect the skill. Live acceptance requires an explicitly
 selected disposable, Agent Insights-enabled subscription.
+
+Run `pytest tests/test_path_matrix.py` from the repository root for the complete offline
+decision matrix. Before a release that changes orchestration, run
+`.agents/skills/agent-insights-onboarding/scripts/agent_insights_live_matrix.py
+--confirm-live` with an interactive Azure user in an explicitly selected disposable
+subscription; never run the live matrix against customer resources.

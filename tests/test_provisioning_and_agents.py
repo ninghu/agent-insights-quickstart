@@ -123,6 +123,42 @@ def test_provision_scratch_maps_nonsecret_outputs(
     assert not any("connectionstring" in item.casefold() for item in deployment_call)
 
 
+def test_scratch_deployment_retries_only_known_request_conflicts(
+    monkeypatch,
+) -> None:
+    class ConflictCli:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def json(self, _arguments, **_kwargs):
+            self.calls += 1
+            if self.calls < 3:
+                raise OnboardingError(
+                    "azure_cli_failed",
+                    "Azure CLI command failed.",
+                    {
+                        "stderr": (
+                            "RequestConflict: Another operation on this or a "
+                            "dependent resource is in progress."
+                        )
+                    },
+                )
+            return {"properties": {"outputs": {}}}
+
+    cli = ConflictCli()
+    sleeps: list[int] = []
+    monkeypatch.setattr(provisioning.time, "sleep", sleeps.append)
+
+    result = provisioning._deploy_scratch_template(
+        cli,
+        ["deployment", "group", "create"],
+    )
+
+    assert result == {"properties": {"outputs": {}}}
+    assert cli.calls == 3
+    assert sleeps == [15, 30]
+
+
 def test_provision_scratch_rejects_missing_outputs(
     make_config,
     azure_context,

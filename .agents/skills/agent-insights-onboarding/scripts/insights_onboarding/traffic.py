@@ -232,7 +232,8 @@ def generate_sample_traffic(
             completed_at=datetime.now(UTC).isoformat(),
         )
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+    max_workers = 1 if deployment.kind == "prompt" else 2
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = [executor.submit(invoke, scenario) for scenario in scenarios]
         outcomes: list[TrafficOutcome] = []
         first_error: BaseException | None = None

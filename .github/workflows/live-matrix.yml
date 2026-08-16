@@ -1,0 +1,126 @@
+name: Live Azure Path Matrix
+
+on:
+  workflow_dispatch:
+    inputs:
+      cases:
+        description: Comma-separated case names or all
+        required: true
+        default: all
+        type: string
+  schedule:
+    - cron: "0 16 * * 0"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: agent-insights-live-matrix
+  cancel-in-progress: false
+
+jobs:
+  live-matrix:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      vars.AGENT_INSIGHTS_LIVE_ENABLED == 'true'
+    runs-on:
+      - self-hosted
+      - agent-insights-live
+    environment: live-azure
+    timeout-minutes: 720
+    env:
+      AGENT_INSIGHTS_LIVE_CASES: ${{ inputs.cases || 'all' }}
+      AGENT_INSIGHTS_LIVE_SUBSCRIPTION_ID: ${{ vars.AGENT_INSIGHTS_LIVE_SUBSCRIPTION_ID }}
+      AGENT_INSIGHTS_LIVE_LOCATION: ${{ vars.AGENT_INSIGHTS_LIVE_LOCATION }}
+      AGENT_INSIGHTS_LIVE_MODEL_NAME: ${{ vars.AGENT_INSIGHTS_LIVE_MODEL_NAME }}
+      AGENT_INSIGHTS_LIVE_MODEL_VERSION: ${{ vars.AGENT_INSIGHTS_LIVE_MODEL_VERSION }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          cache: pip
+      - name: Install locked dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --require-hashes -r requirements-dev.lock
+          python -m pip install --no-deps -e .
+      - name: Verify interactive Azure session
+        shell: pwsh
+        run: |
+          if (-not $env:AGENT_INSIGHTS_LIVE_SUBSCRIPTION_ID) {
+            throw "Set AGENT_INSIGHTS_LIVE_SUBSCRIPTION_ID in the live-azure environment."
+          }
+          if (-not $env:AGENT_INSIGHTS_LIVE_LOCATION) {
+            throw "Set AGENT_INSIGHTS_LIVE_LOCATION in the live-azure environment."
+          }
+          $userType = az account show --query user.type -o tsv
+          if ($LASTEXITCODE -ne 0 -or $userType -ne "user") {
+            throw "The self-hosted runner requires an active interactive Azure CLI user session."
+          }
+      - name: Remove stale matrix resource groups
+        shell: pwsh
+        run: |
+          python `
+            .agents\skills\agent-insights-onboarding\scripts\agent_insights_live_matrix.py `
+            --confirm-live `
+            --cleanup-only
+      - name: Run disposable Azure matrix
+        shell: pwsh
+        run: |
+          $output = python `
+            .agents\skills\agent-insights-onboarding\scripts\agent_insights_live_matrix.py `
+            --confirm-live 2>&1
+          $exitCode = $LASTEXITCODE
+          $output | Write-Host
+          "## Live Azure Path Matrix" | Out-File $env:GITHUB_STEP_SUMMARY
+          '```json' | Out-File $env:GITHUB_STEP_SUMMARY -Append
+          $output | Out-File $env:GITHUB_STEP_SUMMARY -Append
+          '```' | Out-File $env:GITHUB_STEP_SUMMARY -Append
+          if ($exitCode -ne 0) {
+            exit $exitCode
+          }
+      - name: Upload sanitized matrix summary
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: agent-insights-live-matrix-${{ github.run_id }}
+          path: .agent-insights/live-matrix/**
+          if-no-files-found: warn
+          retention-days: 14
+
+  cleanup:
+    if: >-
+      always() &&
+      (github.event_name == 'workflow_dispatch' ||
+      vars.AGENT_INSIGHTS_LIVE_ENABLED == 'true')
+    needs: live-matrix
+    runs-on:
+      - self-hosted
+      - agent-insights-live
+    environment: live-azure
+    timeout-minutes: 120
+    env:
+      AGENT_INSIGHTS_LIVE_SUBSCRIPTION_ID: ${{ vars.AGENT_INSIGHTS_LIVE_SUBSCRIPTION_ID }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          cache: pip
+      - name: Install locked dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --require-hashes -r requirements-dev.lock
+          python -m pip install --no-deps -e .
+      - name: Remove all owned matrix resource groups
+        shell: pwsh
+        run: |
+          $userType = az account show --query user.type -o tsv
+          if ($LASTEXITCODE -ne 0 -or $userType -ne "user") {
+            throw "The cleanup runner requires an active interactive Azure CLI user session."
+          }
+          python `
+            .agents\skills\agent-insights-onboarding\scripts\agent_insights_live_matrix.py `
+            --confirm-live `
+            --cleanup-only

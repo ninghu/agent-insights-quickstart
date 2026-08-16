@@ -97,8 +97,8 @@ for the complete policy and prerequisites.
 
 - Review Azure Monitor, Foundry model, and Hosted Agent pricing before using scratch
   mode.
-- The sample sends six healthy and five intentionally faulty requests with concurrency
-  capped at two.
+- The sample sends six healthy and five intentionally faulty requests. Prompt traffic is
+  sequential to preserve one trace per conversation; Hosted traffic is capped at two.
 - Newly created sample Agents use the known bounded traffic fixtures. Existing customer
   Agents are never invoked by the quickstart; doctor checks for at least three recent
   correlated traces and asks the user to run normal application traffic when none exist.
@@ -136,6 +136,40 @@ pytest
 ruff check .
 mypy .agents/skills/agent-insights-onboarding/scripts
 ```
+
+The full offline decision matrix runs in normal CI:
+
+```shell
+pytest tests/test_path_matrix.py
+```
+
+To list or execute the disposable Azure matrix:
+
+```shell
+python .agents/skills/agent-insights-onboarding/scripts/agent_insights_live_matrix.py \
+  --list-cases
+
+python .agents/skills/agent-insights-onboarding/scripts/agent_insights_live_matrix.py \
+  --confirm-live \
+  --subscription-id <subscription-id> \
+  --location <region>
+```
+
+The live matrix requires an interactive Azure CLI user and an Agent Insights-enabled
+disposable subscription. It runs every supported Prompt/Hosted, scratch/existing,
+created/selected Agent, one-off/scheduled, connection, and protected-content path. Each
+case verifies its trigger, insights, concrete-fix contract, direct portal link, receipts,
+and cleanup. It may take several hours and incur model, monitoring, and Hosted Agent
+charges.
+
+`.github/workflows/live-matrix.yml` provides a guarded weekly/on-demand run on a
+self-hosted runner labeled `agent-insights-live`. Set the repository variable
+`AGENT_INSIGHTS_LIVE_ENABLED=true` to opt into scheduled runs. Configure the subscription,
+region, and optional model variables in the `live-azure` environment and keep an
+interactive `az login` session active; service-principal/OIDC authentication is
+intentionally rejected because it would not test the customer user-delegated path. An
+independent `always()` cleanup job removes only matrix-prefixed resource groups whose
+ownership tags match the runner's signed-in user.
 
 Live tests require a disposable Agent Insights-enabled subscription and are never run
 by pull-request CI.

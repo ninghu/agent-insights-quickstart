@@ -191,6 +191,63 @@ def test_doctor_existing_accepts_repairable_data_plane_denial(
     )
 
 
+def test_doctor_existing_accepts_project_only_connection_plan(
+    monkeypatch,
+    make_config,
+    make_resources,
+    azure_context,
+    azure_ids,
+) -> None:
+    _patch_common_doctor(monkeypatch, azure_context)
+    resources = make_resources()
+    monkeypatch.setattr(orchestrator, "resolve_existing", lambda *_args, **_kwargs: resources)
+    monkeypatch.setattr(
+        orchestrator,
+        "get_project",
+        lambda *_args, **_kwargs: {"location": "westus3"},
+    )
+    monkeypatch.setattr(
+        orchestrator,
+        "list_app_insights_connections",
+        lambda *_args, **_kwargs: [],
+    )
+    monkeypatch.setattr(
+        orchestrator,
+        "plan_existing_connections",
+        lambda *_args, **_kwargs: {
+            "project_connection_name": "project-appinsights",
+        },
+    )
+    monkeypatch.setattr(
+        orchestrator,
+        "permissions_at_scope",
+        lambda *_args: [{"actions": ["*"], "notActions": []}],
+    )
+    monkeypatch.setattr(orchestrator, "require_actions", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(orchestrator, "_validate_existing_model", lambda *_args: None)
+    monkeypatch.setattr(
+        orchestrator,
+        "_existing_caller_capabilities",
+        lambda **_kwargs: (False, False),
+    )
+    monkeypatch.setattr(orchestrator, "missing_assignments", lambda *_args: [])
+    monkeypatch.setattr(orchestrator, "_require_assignment_write", lambda *_args: None)
+    config = make_config(
+        mode="existing",
+        location=None,
+        agent_type="prompt",
+        project_resource_id=azure_ids["project"],
+        agent_name="existing-agent",
+        model_deployment_name="model",
+        application_insights_resource_id=azure_ids["app_insights"],
+    )
+
+    result = orchestrator.doctor(config, cli=object())
+
+    assert result["status"] == "ready"
+    assert result["existing"]["connection_count"] == 0
+
+
 def test_doctor_existing_checks_traces_without_invoking_agent(
     monkeypatch,
     make_config,

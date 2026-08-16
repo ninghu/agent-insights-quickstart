@@ -30,6 +30,7 @@ dev = [
 
 [project.scripts]
 agent-insights-onboard = "insights_onboarding.cli:main"
+agent-insights-live-matrix = "insights_onboarding.live_matrix:main"
 
 [tool.setuptools]
 package-dir = { "" = ".agents/skills/agent-insights-onboarding/scripts" }

@@ -401,7 +401,7 @@ def doctor(config: OnboardingConfig, cli: AzureCli | None = None) -> dict[str, A
             scope=resources.project_resource_id,
         )
     if not connections:
-        connection_plan = plan_existing_connections(
+        plan_existing_connections(
             selected_cli,
             project_resource_id=resources.project_resource_id,
             application_insights_resource_id=
@@ -412,15 +412,6 @@ def doctor(config: OnboardingConfig, cli: AzureCli | None = None) -> dict[str, A
             ["Microsoft.CognitiveServices/accounts/projects/connections/write"],
             scope=resources.project_resource_id,
         )
-        if connection_plan["create_account_connection"]:
-            require_actions(
-                permissions_at_scope(
-                    selected_cli,
-                    resources.foundry_account_resource_id,
-                ),
-                ["Microsoft.CognitiveServices/accounts/connections/write"],
-                scope=resources.foundry_account_resource_id,
-            )
     _validate_existing_model(selected_cli, resources)
     foundry_authorized, monitoring_authorized = _existing_caller_capabilities(
         context=context,
@@ -712,7 +703,11 @@ def build_plan(
             Mutation(
                 "generate_bounded_traffic",
                 target_agent_name,
-                {"healthy": 6, "fault": 5, "max_concurrency": 2},
+                {
+                    "healthy": 6,
+                    "fault": 5,
+                    "max_concurrency": 1 if config.agent_type == "prompt" else 2,
+                },
             )
         )
     scheduling_enabled = config.mode == "scratch" or config.enable_existing_monitor

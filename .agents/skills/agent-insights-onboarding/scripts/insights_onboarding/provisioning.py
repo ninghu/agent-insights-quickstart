@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import time
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
@@ -28,6 +29,7 @@ _MAIN_BICEP = _SKILL_ROOT / "assets" / "infra" / "main.bicep"
 _EXISTING_CONNECTIONS_BICEP = (
     _SKILL_ROOT / "assets" / "infra" / "existing-connections.bicep"
 )
+_SCRATCH_DEPLOYMENT_ATTEMPTS = 4
 
 
 def resource_group_name(config: OnboardingConfig, run_id: str) -> str:
@@ -119,6 +121,27 @@ def _deployment_outputs(value: Any) -> dict[str, Any]:
     return result
 
 
+def _deploy_scratch_template(
+    cli: AzureCli,
+    arguments: list[str],
+) -> Any:
+    for attempt in range(1, _SCRATCH_DEPLOYMENT_ATTEMPTS + 1):
+        try:
+            return cli.json(arguments, timeout=3600)
+        except OnboardingError as error:
+            stderr = str(error.details.get("stderr") or "").casefold()
+            transient_conflict = (
+                error.code == "azure_cli_failed"
+                and "requestconflict" in stderr
+                and "another operation" in stderr
+                and "in progress" in stderr
+            )
+            if not transient_conflict or attempt == _SCRATCH_DEPLOYMENT_ATTEMPTS:
+                raise
+            time.sleep(15 * attempt)
+    raise AssertionError("Scratch deployment retry loop exhausted without returning.")
+
+
 def provision_scratch(
     cli: AzureCli,
     *,
@@ -143,7 +166,8 @@ def provision_scratch(
     model_deployment_name = config.model_deployment_name or normalize_name(
         config.model_name
     )
-    deployment = cli.json(
+    deployment = _deploy_scratch_template(
+        cli,
         [
             "deployment",
             "group",
@@ -169,7 +193,6 @@ def provision_scratch(
             f"grantPrivilegedMonitoringDataReader={str(config.protected_trace_content).lower()}",
             f"tags={json.dumps(_tags(run_id, context), separators=(',', ':'))}",
         ],
-        timeout=3600,
     )
     outputs = _deployment_outputs(deployment)
     required = {
