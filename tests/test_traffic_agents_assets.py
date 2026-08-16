@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import concurrent.futures
 import json
+import textwrap
 import zipfile
 from types import SimpleNamespace
 
@@ -311,10 +312,39 @@ def test_skill_asks_project_choice_before_azure_details(repo_root) -> None:
         "Never enable scheduling based only on the user's confirmation."
         in normalized
     )
-    assert "Insights generated: <insight_count>" in skill
-    assert "Review details: <agent_insights_portal_url>" in skill
     assert "Do not recommend GPT-4-class or older models" in skill
     assert "Prefer GPT-5.6 Terra when offered" in skill
+
+
+def test_skill_final_handoff_prioritizes_review_action(repo_root) -> None:
+    skill = (
+        repo_root
+        / ".agents"
+        / "skills"
+        / "agent-insights-onboarding"
+        / "SKILL.md"
+    ).read_text(encoding="utf-8")
+    template = textwrap.dedent(
+        skill.split("```markdown", 1)[1].split("```", 1)[0]
+    ).strip()
+
+    summary_index = template.index("**Setup summary**")
+    review_index = template.index("### Next action — Review your insights")
+    management_index = template.index("**Manage this setup**")
+    bug_index = template.index("Found a bug or have feedback?")
+
+    assert summary_index < review_index < management_index < bug_index
+    assert (
+        "[Open Agent Insights in Microsoft Foundry]"
+        "(<agent_insights_portal_url>)"
+    ) in template
+    assert "Render it as Markdown,\n    not as a fenced code block" in skill
+    assert "Keep the bug link as the final line." in skill
+    assert "Review details:" not in template
+    assert "First run trigger:" not in template
+    assert template.splitlines()[-1] == (
+        "Found a bug or have feedback? [Create a bug](<feedback_url>)"
+    )
 
 
 def test_readme_has_one_clone_and_ask_entry_path(repo_root) -> None:

@@ -130,21 +130,41 @@ reference for the selected path:
     also require `result_summary.concrete_code_fix_count >= 1`. For a Prompt sample,
     require `result_summary.concrete_prompt_fix_count >= 1`, grounded to the system
     instructions surface. Prose-only output is a demo regression, not success. Give the
-    user the Foundry portal
-    link, first-result insight count, agent/version, monitor/run/insight IDs, cost
-    estimate when returned by the service, schedule interval/next run when enabled,
-    receipt path, and cleanup command. End with this concise handoff:
+    user the first-result insight count, applicable concrete-fix count, agent/version,
+    cost estimate when returned by the service, schedule interval/next run when enabled,
+    receipt path, cleanup command, and Foundry portal link. Keep low-level monitor,
+    run, and insight IDs in the receipt instead of duplicating them in chat.
 
-    ```text
-    Agent Insights setup complete.
-    Insights generated: <insight_count>
-    Concrete code fixes: <concrete_code_fix_count>
-    Concrete system prompt fixes: <concrete_prompt_fix_count>
-    First run trigger: <first_run_trigger>
-    Review details: <agent_insights_portal_url>
-    In Foundry, open Monitor > Agent Insights if the link lands on project home.
-    If you find a bug or have an improvement suggestion, create a bug:
-    <feedback_url>
+    Make the final response consist only of the handoff below. Render it as Markdown,
+    not as a fenced code block. Do not prefix it with another completion sentence,
+    repeat `status: complete`, show the raw portal URL, or repeat the first-run trigger.
+    Omit optional rows whose values were not returned. Show only the Agent's applicable
+    concrete-fix type; do not show an unrelated zero-count code or prompt-fix row.
+    Keep the bug link as the final line.
+
+    ```markdown
+    **Agent Insights setup complete.**
+
+    **Setup summary**
+    - **Agent:** `<agent_name>` (`<agent_version>`, `<agent_kind>`)
+    - **Insights generated:** `<insight_count>`
+    - **Concrete fixes:** `<concrete_fix_count> <code|system prompt> fixes`
+    - **Schedule:** `<Enabled — every schedule_interval | Not enabled — one-off run>`
+    - **Next run:** `<next_run>` (scheduled runs only)
+    - **Estimated cost:** `<estimated_cost>` (when returned)
+
+    ### Next action — Review your insights
+
+    [Open Agent Insights in Microsoft Foundry](<agent_insights_portal_url>)
+
+    Review the generated insights and any concrete fixes. If the portal opens the
+    project home, select **Monitor > Agent Insights**.
+
+    **Manage this setup**
+    - **Receipt:** `<receipt_path>`
+    - **Cleanup:** `<cleanup_command>`
+
+    Found a bug or have feedback? [Create a bug](<feedback_url>)
     ```
 
 ## Recovery
