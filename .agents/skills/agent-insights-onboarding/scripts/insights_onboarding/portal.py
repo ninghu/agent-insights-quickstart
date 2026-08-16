@@ -47,6 +47,6 @@ def agent_insights_url(
 ) -> str:
     return (
         f"{foundry_project_prefix(project_resource_id)}/build/agents/"
-        f"{quote(agent_name, safe='')}/monitor/overview?"
+        f"{quote(agent_name, safe='')}/monitor/insights?"
         + urlencode({"tid": tenant_id})
     )

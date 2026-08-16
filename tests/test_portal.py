@@ -24,6 +24,6 @@ def test_foundry_portal_links_encode_project_context(
         f"{prefix}/home?tid=22222222-2222-2222-2222-222222222222"
     )
     assert insights_url == (
-        f"{prefix}/build/agents/support%20agent/monitor/overview?"
+        f"{prefix}/build/agents/support%20agent/monitor/insights?"
         "tid=22222222-2222-2222-2222-222222222222"
     )

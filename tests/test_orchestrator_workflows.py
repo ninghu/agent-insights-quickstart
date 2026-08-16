@@ -370,7 +370,7 @@ def test_onboard_scratch_writes_resumable_receipts(
         "Agent Insights returned 1 insight for the first verified result."
     )
     assert final["agent_insights_portal_url"].endswith(
-        "/build/agents/insights-prompt-abc123de/monitor/overview?"
+        "/build/agents/insights-prompt-abc123de/monitor/insights?"
         "tid=22222222-2222-2222-2222-222222222222"
     )
     assert read_json(run_dir / "plan.json")["run_id"] == run_id
@@ -383,7 +383,7 @@ def test_onboard_scratch_writes_resumable_receipts(
         "maximum": 20,
     }
     assert str(progress_events[0]["agent_insights_portal_url"]).endswith(
-        "/build/agents/insights-prompt-abc123de/monitor/overview?"
+        "/build/agents/insights-prompt-abc123de/monitor/insights?"
         "tid=22222222-2222-2222-2222-222222222222"
     )
     persisted_final = read_json(run_dir / "final-receipt.json")
