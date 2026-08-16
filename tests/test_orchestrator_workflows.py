@@ -305,6 +305,7 @@ def test_onboard_scratch_writes_resumable_receipts(
         insight_ids=("insight-1",),
         estimated_cost={"amount": 0.01, "currency": "USD"},
         enabled=True,
+        run_trigger="scheduled",
     )
     monkeypatch.setattr(orchestrator, "_RUNS_ROOT", tmp_path)
     monkeypatch.setattr(orchestrator, "doctor", lambda *_args, **_kwargs: {"status": "ready"})
@@ -344,7 +345,7 @@ def test_onboard_scratch_writes_resumable_receipts(
     progress_events: list[dict[str, object]] = []
 
     def complete_monitor(**kwargs):
-        kwargs["run_started_callback"]("monitor-1", "run-1")
+        kwargs["run_started_callback"]("monitor-1", "run-1", "scheduled")
         return monitor, True
 
     monkeypatch.setattr(
@@ -367,6 +368,7 @@ def test_onboard_scratch_writes_resumable_receipts(
     assert final["result_summary"]["insight_count"] == 1
     assert final["result_summary"]["concrete_code_fix_count"] == 0
     assert final["result_summary"]["concrete_prompt_fix_count"] == 0
+    assert final["result_summary"]["first_run_trigger"] == "scheduled"
     assert final["result_summary"]["message"] == (
         "Agent Insights returned 1 insight for the first verified result."
     )
@@ -379,6 +381,7 @@ def test_onboard_scratch_writes_resumable_receipts(
     assert read_json(run_dir / "traffic-receipt.json")["status"] == "ingested"
     assert progress_events == [read_json(run_dir / "run-started-receipt.json")]
     assert progress_events[0]["status"] == "insights_running"
+    assert progress_events[0]["insights_run_trigger"] == "scheduled"
     assert progress_events[0]["first_run_estimated_minutes"] == {
         "minimum": 10,
         "maximum": 20,
@@ -922,7 +925,7 @@ def test_new_insights_run_reports_portal_handoff_before_waiting(
     tmp_path,
     make_deployment,
 ) -> None:
-    started: list[tuple[str, str]] = []
+    started: list[tuple[str, str, str]] = []
 
     class NewRunClient:
         def get_or_create_monitor(self, **_kwargs):
@@ -936,7 +939,7 @@ def test_new_insights_run_reports_portal_handoff_before_waiting(
             return {"id": "run-new"}
 
         def wait_run(self, **_kwargs):
-            assert started == [("monitor-new", "run-new")]
+            assert started == [("monitor-new", "run-new", "manual")]
 
         def list_insights(self, _monitor_id):
             return [{"id": "insight-new"}]
@@ -957,14 +960,182 @@ def test_new_insights_run_reports_portal_handoff_before_waiting(
         lookback_hours=168,
         allow_existing_result=False,
         timeout_seconds=10,
-        run_started_callback=lambda monitor_id, run_id: started.append(
-            (monitor_id, run_id)
+        run_started_callback=lambda monitor_id, run_id, trigger: started.append(
+            (monitor_id, run_id, trigger)
         ),
     )
 
     assert created is True
     assert outcome.run_id == "run-new"
     assert read_json(tmp_path / "insights-state.json")["status"] == "started"
+
+
+def test_scheduling_uses_immediate_scheduled_run_without_manual_run(
+    tmp_path,
+    make_deployment,
+) -> None:
+    started: list[tuple[str, str, str]] = []
+    enabled: list[str] = []
+
+    class ScheduledRunClient:
+        def get_or_create_monitor(self, **_kwargs):
+            return {
+                "id": "monitor-scheduled",
+                "enabled": False,
+                "run_interval_hours": 24,
+            }, True
+
+        def list_runs(self, _monitor_id):
+            return [{"id": "old-manual", "trigger": "manual", "status": "succeeded"}]
+
+        def enable_monitor(self, monitor_id):
+            enabled.append(monitor_id)
+            return {
+                "id": monitor_id,
+                "enabled": True,
+                "run_interval_hours": 24,
+            }
+
+        def wait_new_scheduled_run(self, *, monitor_id, excluded_run_ids):
+            assert monitor_id == "monitor-scheduled"
+            assert excluded_run_ids == {"old-manual"}
+            return {
+                "id": "run-scheduled",
+                "trigger": "scheduled",
+                "status": "queued",
+            }
+
+        def create_run(self, *_args, **_kwargs):
+            raise AssertionError("Scheduling must not create a manual run")
+
+        def wait_run(self, **_kwargs):
+            assert started == [
+                ("monitor-scheduled", "run-scheduled", "scheduled")
+            ]
+
+        def list_insights(self, _monitor_id):
+            return [{"id": "insight-scheduled"}]
+
+        def get_monitor(self, _monitor_id):
+            return {
+                "id": "monitor-scheduled",
+                "enabled": True,
+                "run_interval_hours": 24,
+            }
+
+    outcome, created = orchestrator._complete_monitor(
+        client=ScheduledRunClient(),
+        run_dir=tmp_path,
+        deployment=make_deployment(),
+        model_deployment_name="model",
+        enable_monitor=True,
+        lookback_hours=168,
+        allow_existing_result=False,
+        timeout_seconds=10,
+        run_started_callback=lambda monitor_id, run_id, trigger: started.append(
+            (monitor_id, run_id, trigger)
+        ),
+    )
+
+    assert created is True
+    assert enabled == ["monitor-scheduled"]
+    assert outcome.run_id == "run-scheduled"
+    assert outcome.enabled is True
+    assert outcome.run_trigger == "scheduled"
+    state = read_json(tmp_path / "insights-state.json")
+    assert state["run_trigger"] == "scheduled"
+    assert state["monitor_enabled_by_workflow"] is True
+
+
+def test_failed_first_scheduled_run_rolls_back_new_enablement(
+    tmp_path,
+    make_deployment,
+) -> None:
+    disabled: list[str] = []
+
+    class FailedScheduledRunClient:
+        def get_or_create_monitor(self, **_kwargs):
+            return {"id": "monitor-failed", "enabled": False}, True
+
+        def list_runs(self, _monitor_id):
+            return []
+
+        def enable_monitor(self, monitor_id):
+            return {"id": monitor_id, "enabled": True}
+
+        def wait_new_scheduled_run(self, **_kwargs):
+            return {
+                "id": "run-failed",
+                "trigger": "scheduled",
+                "status": "queued",
+            }
+
+        def wait_run(self, **_kwargs):
+            raise orchestrator.OnboardingError(
+                "insights_run_failed",
+                "Scheduled run failed.",
+            )
+
+        def disable_monitor(self, monitor_id):
+            disabled.append(monitor_id)
+            return {"id": monitor_id, "enabled": False}
+
+    with pytest.raises(orchestrator.OnboardingError) as failed:
+        orchestrator._complete_monitor(
+            client=FailedScheduledRunClient(),
+            run_dir=tmp_path,
+            deployment=make_deployment(),
+            model_deployment_name="model",
+            enable_monitor=True,
+            lookback_hours=168,
+            allow_existing_result=False,
+            timeout_seconds=10,
+        )
+
+    assert failed.value.code == "insights_run_failed"
+    assert disabled == ["monitor-failed"]
+
+
+def test_scheduled_admission_timeout_rolls_back_new_enablement(
+    tmp_path,
+    make_deployment,
+) -> None:
+    disabled: list[str] = []
+
+    class AdmissionTimeoutClient:
+        def get_or_create_monitor(self, **_kwargs):
+            return {"id": "monitor-timeout", "enabled": False}, True
+
+        def list_runs(self, _monitor_id):
+            return []
+
+        def enable_monitor(self, monitor_id):
+            return {"id": monitor_id, "enabled": True}
+
+        def wait_new_scheduled_run(self, **_kwargs):
+            raise orchestrator.OnboardingError(
+                "scheduled_run_admission_timeout",
+                "Scheduled run was not admitted.",
+            )
+
+        def disable_monitor(self, monitor_id):
+            disabled.append(monitor_id)
+            return {"id": monitor_id, "enabled": False}
+
+    with pytest.raises(orchestrator.OnboardingError) as timeout:
+        orchestrator._complete_monitor(
+            client=AdmissionTimeoutClient(),
+            run_dir=tmp_path,
+            deployment=make_deployment(),
+            model_deployment_name="model",
+            enable_monitor=True,
+            lookback_hours=168,
+            allow_existing_result=False,
+            timeout_seconds=10,
+        )
+
+    assert timeout.value.code == "scheduled_run_admission_timeout"
+    assert disabled == ["monitor-timeout"]
 
 
 @pytest.mark.parametrize(("fix_kind", "expected_error"), (("code_change", None), ("prose", True)))

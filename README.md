@@ -65,6 +65,10 @@ link and explains that the first run may take **10–20 minutes**. Open the link
 to watch progress; the onboarding agent continues monitoring the job and reports the
 verified result when it finishes.
 
+When scheduled generation is selected, enabling the monitor creates its first scheduled
+occurrence immediately. The workflow verifies that scheduled run directly and does not
+create a duplicate manual run. Manual runs are reserved for one-off onboarding.
+
 ## What the workflow changes
 
 The workflow applies only missing assignments at exact resource scopes. It never grants

@@ -245,6 +245,29 @@ class AgentInsightsClient:
                 )
             time.sleep(30)
 
+    def wait_new_scheduled_run(
+        self,
+        *,
+        monitor_id: str,
+        excluded_run_ids: set[str],
+        timeout_seconds: float = 300,
+    ) -> Mapping[str, Any]:
+        deadline = time.monotonic() + timeout_seconds
+        while True:
+            for run in self.list_runs(monitor_id):
+                run_id = str(run.get("id") or "")
+                trigger = str(run.get("trigger") or "").casefold()
+                if run_id and run_id not in excluded_run_ids and trigger == "scheduled":
+                    return run
+            if time.monotonic() >= deadline:
+                raise OnboardingError(
+                    "scheduled_run_admission_timeout",
+                    "The monitor was enabled, but its immediate scheduled run was not "
+                    "admitted before the timeout.",
+                    {"monitor_id": monitor_id},
+                )
+            time.sleep(5)
+
     def list_insights(
         self,
         monitor_id: str,
@@ -278,6 +301,19 @@ class AgentInsightsClient:
             raise OnboardingError(
                 "monitor_enable_failed",
                 "Agent Insights monitor did not become enabled.",
+            )
+        return payload
+
+    def disable_monitor(self, monitor_id: str) -> Mapping[str, Any]:
+        _, payload = self._request(
+            "PATCH",
+            f"/agent_insight_monitors/{monitor_id}",
+            json_body={"enabled": False},
+        )
+        if not isinstance(payload, Mapping) or payload.get("enabled") is not False:
+            raise OnboardingError(
+                "monitor_disable_failed",
+                "Agent Insights monitor did not become disabled.",
             )
         return payload
 

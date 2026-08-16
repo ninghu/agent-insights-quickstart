@@ -143,5 +143,6 @@ class MonitorOutcome:
     enabled: bool
     concrete_code_fix_count: int = 0
     concrete_prompt_fix_count: int = 0
+    run_trigger: str = "manual"
     run_interval_hours: float | None = None
     next_scheduled_run_at: str | None = None

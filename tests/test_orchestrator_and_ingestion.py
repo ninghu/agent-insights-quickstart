@@ -70,10 +70,11 @@ def test_build_plan_for_scratch_contains_expected_mutations(
         "create_sample_agent_version",
         "generate_bounded_traffic",
         "create_or_reuse_monitor",
-        "run_agent_insights",
         "enable_monitor",
+        "wait_for_scheduled_agent_insights_result",
     ]
     assert plan.expected["traffic"] == {"healthy": 6, "fault": 5, "total": 11}
+    assert plan.expected["first_run_trigger"] == "scheduled"
     assert plan.expected["monitor_enabled"] is True
 
 
@@ -126,10 +127,11 @@ def test_build_plan_for_existing_covers_role_connection_and_monitor_paths(
         "create_app_insights_connections",
         "create_role_assignment",
         "create_or_reuse_monitor",
-        "create_or_reuse_agent_insights_result",
         "enable_monitor",
+        "wait_for_scheduled_agent_insights_result",
     ]
     assert plan.expected["traffic"] == {"generated": 0}
+    assert plan.expected["first_run_trigger"] == "scheduled"
     assert plan.expected["monitor_enabled"] is True
 
 
@@ -228,8 +230,8 @@ def test_build_plan_scheduled_adds_identity_mutation_when_project_has_no_princip
     assert kinds.count("ensure_role_assignment_after_identity") == 5
     assert kinds[-3:] == [
         "create_or_reuse_monitor",
-        "create_or_reuse_agent_insights_result",
         "enable_monitor",
+        "wait_for_scheduled_agent_insights_result",
     ]
 
 
@@ -281,6 +283,7 @@ def test_build_plan_one_off_skips_project_identity_mutations(
     assert "enable_project_system_identity" not in kinds
     assert "ensure_role_assignment_after_identity" not in kinds
     assert all(item.principal_type == "User" for item in planned_assignments)
+    assert plan.expected["first_run_trigger"] == "manual"
 
 
 @pytest.mark.parametrize(

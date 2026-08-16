@@ -170,6 +170,29 @@ def test_agent_insights_wait_run_maps_terminal_status_and_timeout(monkeypatch) -
     assert timeout.value.code == "insights_run_timeout"
 
 
+def test_agent_insights_waits_for_new_scheduled_run(monkeypatch) -> None:
+    client = AgentInsightsClient.__new__(AgentInsightsClient)
+    responses = iter(
+        [
+            [{"id": "old-run", "trigger": "manual"}],
+            [
+                {"id": "old-run", "trigger": "manual"},
+                {"id": "scheduled-run", "trigger": "scheduled"},
+            ],
+        ]
+    )
+    client.list_runs = lambda _monitor_id: next(responses)
+    monkeypatch.setattr(insights_api.time, "sleep", lambda _seconds: None)
+
+    run = client.wait_new_scheduled_run(
+        monitor_id="monitor",
+        excluded_run_ids={"old-run"},
+        timeout_seconds=10,
+    )
+
+    assert run["id"] == "scheduled-run"
+
+
 def test_cleanup_scratch_refuses_unowned_resource_groups(azure_context: object) -> None:
     resource_group_id = (
         "/subscriptions/11111111-1111-1111-1111-111111111111"

@@ -76,6 +76,9 @@ reference for the selected path:
    Pass `--enable-existing-monitor` only when the user selects yes. A new monitor uses a
    24-hour interval; an existing monitor keeps its current interval. If the monitor is
    already enabled, preserve it and report its next scheduled run.
+   Enabling a disabled monitor schedules an immediate first occurrence. Use that
+   scheduled run for first-result verification; never create an additional manual run.
+   Create a manual run only for one-off onboarding.
    One-off runs use caller OBO. Do not plan Project MI model, project, or monitoring
    roles unless scheduled generation is enabled.
 9. Select the insight generation model:
@@ -137,6 +140,7 @@ reference for the selected path:
     Insights generated: <insight_count>
     Concrete code fixes: <concrete_code_fix_count>
     Concrete system prompt fixes: <concrete_prompt_fix_count>
+    First run trigger: <first_run_trigger>
     Review details: <agent_insights_portal_url>
     In Foundry, open Monitor > Agent Insights if the link lands on project home.
     If you find a bug or have an improvement suggestion, create a bug:

@@ -715,9 +715,19 @@ def build_plan(
                 {"healthy": 6, "fault": 5, "max_concurrency": 2},
             )
         )
-    mutations.extend(
-        (
-            Mutation("create_or_reuse_monitor", target_agent_name),
+    scheduling_enabled = config.mode == "scratch" or config.enable_existing_monitor
+    mutations.append(Mutation("create_or_reuse_monitor", target_agent_name))
+    if scheduling_enabled:
+        mutations.append(Mutation("enable_monitor", target_agent_name))
+        mutations.append(
+            Mutation(
+                "wait_for_scheduled_agent_insights_result",
+                target_agent_name,
+                {"require_nonempty_insights": True},
+            )
+        )
+    else:
+        mutations.append(
             Mutation(
                 (
                     "run_agent_insights"
@@ -729,15 +739,12 @@ def build_plan(
                     "require_nonempty_insights": True,
                     "lookback_hours": config.lookback_hours,
                 },
-            ),
+            )
         )
-    )
-    if config.mode == "scratch" or config.enable_existing_monitor:
-        mutations.append(Mutation("enable_monitor", target_agent_name))
     expected = {
         "first_result": "nonempty",
-        "monitor_enabled": config.mode == "scratch"
-        or config.enable_existing_monitor,
+        "first_run_trigger": "scheduled" if scheduling_enabled else "manual",
+        "monitor_enabled": scheduling_enabled,
         "traffic": (
             {"healthy": 6, "fault": 5, "total": 11}
             if creates_sample_agent
@@ -928,7 +935,7 @@ def _complete_monitor(
     lookback_hours: int,
     allow_existing_result: bool,
     timeout_seconds: float,
-    run_started_callback: Callable[[str, str], None] | None = None,
+    run_started_callback: Callable[[str, str, str], None] | None = None,
     required_concrete_fix_kind: str | None = None,
 ) -> tuple[MonitorOutcome, bool]:
     def concrete_fix_counts(
@@ -1017,6 +1024,10 @@ def _complete_monitor(
         monitor_id = str(state.get("monitor_id") or "")
         run_id = str(state.get("run_id") or "")
         created = bool(state.get("monitor_created"))
+        run_trigger = str(state.get("run_trigger") or "manual")
+        monitor_enabled_by_workflow = bool(
+            state.get("monitor_enabled_by_workflow")
+        )
     else:
         monitor, created = client.get_or_create_monitor(
             agent_name=deployment.name,
@@ -1054,6 +1065,9 @@ def _complete_monitor(
                     enabled=bool(final_monitor.get("enabled")),
                     concrete_code_fix_count=code_fix_count,
                     concrete_prompt_fix_count=prompt_fix_count,
+                    run_trigger=str(
+                        succeeded_runs[0].get("trigger") or "existing"
+                    ).casefold(),
                     run_interval_hours=interval,
                     next_scheduled_run_at=next_run,
                 )
@@ -1067,7 +1081,54 @@ def _complete_monitor(
                     },
                 )
                 return outcome, False
-        run = client.create_run(monitor_id, lookback_hours=lookback_hours)
+        monitor_enabled_by_workflow = False
+        if enable_monitor:
+            existing_runs = client.list_runs(monitor_id)
+            excluded_run_ids = {
+                str(run.get("id") or "")
+                for run in existing_runs
+                if run.get("id")
+            }
+            if not bool(monitor.get("enabled")):
+                monitor = client.enable_monitor(monitor_id)
+                monitor_enabled_by_workflow = True
+            else:
+                active_scheduled_runs = [
+                    run
+                    for run in existing_runs
+                    if str(run.get("trigger") or "").casefold() == "scheduled"
+                    and str(run.get("status") or "").casefold()
+                    not in {"succeeded", "failed", "canceled", "cancelled"}
+                ]
+                if active_scheduled_runs:
+                    excluded_run_ids.discard(
+                        str(active_scheduled_runs[0].get("id") or "")
+                    )
+            try:
+                run = client.wait_new_scheduled_run(
+                    monitor_id=monitor_id,
+                    excluded_run_ids=excluded_run_ids,
+                )
+            except OnboardingError as error:
+                if monitor_enabled_by_workflow:
+                    try:
+                        client.disable_monitor(monitor_id)
+                    except OnboardingError as rollback_error:
+                        raise OnboardingError(
+                            "scheduled_run_admission_failed_and_rollback_failed",
+                            "The immediate scheduled run was not admitted, and the "
+                            "workflow could not disable the newly enabled monitor.",
+                            {
+                                "monitor_id": monitor_id,
+                                "run_error": error.code,
+                                "rollback_error": rollback_error.code,
+                            },
+                        ) from error
+                raise
+            run_trigger = "scheduled"
+        else:
+            run = client.create_run(monitor_id, lookback_hours=lookback_hours)
+            run_trigger = "manual"
         run_id = str(run.get("id") or "")
         write_json_atomic(
             state_path,
@@ -1076,29 +1137,47 @@ def _complete_monitor(
                 "monitor_id": monitor_id,
                 "run_id": run_id,
                 "monitor_created": created,
+                "monitor_enabled_by_workflow": monitor_enabled_by_workflow,
+                "run_trigger": run_trigger,
             },
         )
         if run_started_callback is not None:
-            run_started_callback(monitor_id, run_id)
-    client.wait_run(
-        monitor_id=monitor_id,
-        run_id=run_id,
-        timeout_seconds=timeout_seconds,
-    )
-    insights = list_insights()
-    if not insights:
-        raise OnboardingError(
-            "empty_insights",
-            "Agent Insights run succeeded but returned no insights.",
-            {"monitor_id": monitor_id, "run_id": run_id},
+            run_started_callback(monitor_id, run_id, run_trigger)
+    try:
+        client.wait_run(
+            monitor_id=monitor_id,
+            run_id=run_id,
+            timeout_seconds=timeout_seconds,
         )
-    code_fix_count, prompt_fix_count = require_demo_concrete_fix(
-        insights,
-        run_id,
-    )
+        insights = list_insights()
+        if not insights:
+            raise OnboardingError(
+                "empty_insights",
+                "Agent Insights run succeeded but returned no insights.",
+                {"monitor_id": monitor_id, "run_id": run_id},
+            )
+        code_fix_count, prompt_fix_count = require_demo_concrete_fix(
+            insights,
+            run_id,
+        )
+    except OnboardingError as error:
+        if monitor_enabled_by_workflow:
+            try:
+                client.disable_monitor(monitor_id)
+            except OnboardingError as rollback_error:
+                raise OnboardingError(
+                    "scheduled_first_run_failed_and_rollback_failed",
+                    "The immediate scheduled run failed, and the workflow could not "
+                    "disable the newly enabled monitor.",
+                    {
+                        "monitor_id": monitor_id,
+                        "run_id": run_id,
+                        "run_error": error.code,
+                        "rollback_error": rollback_error.code,
+                    },
+                ) from error
+        raise
     monitor = client.get_monitor(monitor_id)
-    if enable_monitor and not bool(monitor.get("enabled")):
-        monitor = client.enable_monitor(monitor_id)
     interval, next_run = schedule_fields(monitor)
     outcome = MonitorOutcome(
         monitor_id=monitor_id,
@@ -1112,6 +1191,7 @@ def _complete_monitor(
         enabled=bool(monitor.get("enabled")),
         concrete_code_fix_count=code_fix_count,
         concrete_prompt_fix_count=prompt_fix_count,
+        run_trigger=run_trigger,
         run_interval_hours=interval,
         next_scheduled_run_at=next_run,
     )
@@ -1162,6 +1242,7 @@ def _finalize(
             "insight_count": insight_count,
             "concrete_code_fix_count": monitor.concrete_code_fix_count,
             "concrete_prompt_fix_count": monitor.concrete_prompt_fix_count,
+            "first_run_trigger": monitor.run_trigger,
             "message": (
                 f"Agent Insights returned {insight_count} insight"
                 + ("" if insight_count == 1 else "s")
@@ -1363,13 +1444,18 @@ def onboard(
     traffic_payload["ingestion_evidence"] = ingestion_evidence
     write_json_atomic(run_dir / "traffic-receipt.json", traffic_payload)
 
-    def report_run_started(monitor_id: str, insights_run_id: str) -> None:
+    def report_run_started(
+        monitor_id: str,
+        insights_run_id: str,
+        run_trigger: str,
+    ) -> None:
         receipt_path = run_dir / "run-started-receipt.json"
         progress = {
             "status": "insights_running",
             "onboarding_run_id": selected_run_id,
             "monitor_id": monitor_id,
             "insights_run_id": insights_run_id,
+            "insights_run_trigger": run_trigger,
             "agent_insights_portal_url": agent_insights_url(
                 resources.project_resource_id,
                 live_context.tenant_id,
