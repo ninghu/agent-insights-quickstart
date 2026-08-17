@@ -219,21 +219,58 @@ def test_role_assignment_template_contains_expected_role_guids_and_scopes(assets
     for guid in (
         "53ca6127-db72-4b80-b1b0-d745d6d5456d",
         "eadc314b-1a2d-4efa-be10-5d325db5065e",
-        "5e0bd9bd-7b93-4f28-af87-19fc36ad61bd",
         "43d0d8ad-25c7-4714-9337-8ba259a9fe05",
         "dbc9c667-e97f-4491-aee6-90b9cf960190",
     ):
         assert guid in template
     for scope in ("scope: account", "scope: project", "scope: appInsights", "scope: logAnalytics"):
         assert scope in template
-    assert "projectManagedIdentityModelUser" in template
     assert "projectManagedIdentityFoundryUser" in template
+    assert "projectManagedIdentityModelUser" not in template
+    assert "5e0bd9bd-7b93-4f28-af87-19fc36ad61bd" not in template
     assert (
-        "roleDefinitionId: subscriptionResourceId("
-        "'Microsoft.Authorization/roleDefinitions', "
-        "cognitiveServicesOpenAIUserRoleGuid)"
+        "name: guid(account.id, projectPrincipalId, foundryUserRoleGuid)"
+    ) in template
+    assert (
+        "projectManagedIdentityFoundryUser "
+        "'Microsoft.Authorization/roleAssignments@2022-04-01' = { "
+        "name: guid(account.id, projectPrincipalId, foundryUserRoleGuid) "
+        "scope: account"
     ) in " ".join(template.split())
     assert "param grantPrivilegedMonitoringDataReader bool = false" in template
+
+
+def test_permission_docs_match_simplified_native_policy(repo_root) -> None:
+    readme = (repo_root / "README.md").read_text(encoding="utf-8")
+    permissions = (
+        repo_root
+        / ".agents"
+        / "skills"
+        / "agent-insights-onboarding"
+        / "references"
+        / "permissions.md"
+    ).read_text(encoding="utf-8")
+    skill = (
+        repo_root
+        / ".agents"
+        / "skills"
+        / "agent-insights-onboarding"
+        / "SKILL.md"
+    ).read_text(encoding="utf-8")
+    normalized = " ".join((readme + permissions + skill).split())
+
+    assert (
+        "Foundry User for the project managed identity on the parent Foundry account"
+        in normalized
+    )
+    assert (
+        "Do not add separate project-scoped Foundry User or Cognitive Services "
+        "OpenAI User assignments"
+    ) in normalized
+    assert (
+        "Entra-authenticated model connected from another account"
+        in normalized
+    )
 
 
 def test_scratch_template_defaults_to_gpt5_capacity(assets_root) -> None:

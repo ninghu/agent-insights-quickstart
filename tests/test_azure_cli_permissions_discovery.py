@@ -330,7 +330,7 @@ def test_permission_matching_and_assignment_identity(azure_ids: dict[str, str]) 
     ]
 
 
-def test_project_mi_uses_narrow_model_inference_role(
+def test_project_mi_uses_single_account_foundry_role(
     azure_ids: dict[str, str],
 ) -> None:
     assignments = required_assignments(
@@ -344,24 +344,22 @@ def test_project_mi_uses_narrow_model_inference_role(
         protected_trace_content=False,
         project_mi_execution=True,
     )
-    project_mi_account_roles = [
-        item.role
+    project_mi_assignments = [
+        (item.role, item.scope)
         for item in assignments
         if item.principal_type == "ServicePrincipal"
-        and item.scope == azure_ids["account"]
     ]
 
-    assert project_mi_account_roles == [COGNITIVE_SERVICES_OPENAI_USER]
-    assert FOUNDRY_USER not in project_mi_account_roles
-    project_mi_project_roles = [
-        item.role
-        for item in assignments
-        if item.principal_type == "ServicePrincipal"
-        and item.scope == azure_ids["project"]
+    assert project_mi_assignments == [
+        (FOUNDRY_USER, azure_ids["account"]),
+        (MONITORING_READER, azure_ids["app_insights"]),
     ]
-    assert project_mi_project_roles == [FOUNDRY_USER]
     assert all(
-        item.role != PRIVILEGED_MONITORING_DATA_READER for item in assignments
+        item.role not in {
+            COGNITIVE_SERVICES_OPENAI_USER,
+            PRIVILEGED_MONITORING_DATA_READER,
+        }
+        for item in assignments
     )
 
 

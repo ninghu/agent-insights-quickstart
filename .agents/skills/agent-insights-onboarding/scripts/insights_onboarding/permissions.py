@@ -52,6 +52,7 @@ PRIVILEGED_MONITORING_DATA_READER = Role(
     "Privileged Monitoring Data Reader",
     "dbc9c667-e97f-4491-aee6-90b9cf960190",
 )
+# Keep this role recognizable so cleanup can process receipts from older runs.
 COGNITIVE_SERVICES_OPENAI_USER = Role(
     "Cognitive Services OpenAI User",
     "5e0bd9bd-7b93-4f28-af87-19fc36ad61bd",
@@ -83,14 +84,8 @@ def required_assignments(
                 RequiredAssignment(
                     project_principal_id,
                     "ServicePrincipal",
-                    COGNITIVE_SERVICES_OPENAI_USER,
-                    foundry_account_id,
-                ),
-                RequiredAssignment(
-                    project_principal_id,
-                    "ServicePrincipal",
                     FOUNDRY_USER,
-                    project_id,
+                    foundry_account_id,
                 ),
                 RequiredAssignment(
                     project_principal_id,

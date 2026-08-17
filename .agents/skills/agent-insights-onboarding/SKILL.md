@@ -52,7 +52,7 @@ reference for the selected path:
      user to choose another component.
    - If none exists, run `discover app-insights` in the project's resource group first,
      then subscription-wide if needed. Ask the user to select a component; the onboarding
-     CLI creates the missing project/account connection and scoped access.
+     CLI creates the missing project connection and scoped access.
    - If multiple Application Insights connections exist, stop with the ambiguity instead
      of guessing or deleting one.
 7. For an existing project, ask: **Would you like to use an existing Agent or create a
@@ -79,8 +79,14 @@ reference for the selected path:
    Enabling a disabled monitor schedules an immediate first occurrence. Use that
    scheduled run for first-result verification; never create an additional manual run.
    Create a manual run only for one-off onboarding.
-   One-off runs use caller OBO. Do not plan Project MI model, project, or monitoring
-   roles unless scheduled generation is enabled.
+   One-off runs use caller OBO. Do not plan Project MI Foundry-account or monitoring
+   roles unless scheduled generation is enabled. For a scheduled direct/native model,
+   Project MI needs Foundry User on the parent Foundry account and Monitoring Reader on
+   Application Insights. Add Privileged Monitoring Data Reader on the linked workspace
+   only for protected traces. Do not add separate project-scoped Foundry User or
+   Cognitive Services OpenAI User assignments for this native path.
+   Treat an Entra-authenticated model connected from another account as an exception:
+   never reuse the native role plan or guess the external model-account scope.
 9. Select the insight generation model:
    - For an existing project, run `discover deployments` and recommend a current GPT-5+
      deployment.

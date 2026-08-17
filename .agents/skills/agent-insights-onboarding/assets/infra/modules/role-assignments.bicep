@@ -30,7 +30,6 @@ param grantPrivilegedMonitoringDataReader bool = false
 
 var foundryUserRoleGuid = '53ca6127-db72-4b80-b1b0-d745d6d5456d'
 var foundryProjectManagerRoleGuid = 'eadc314b-1a2d-4efa-be10-5d325db5065e'
-var cognitiveServicesOpenAIUserRoleGuid = '5e0bd9bd-7b93-4f28-af87-19fc36ad61bd'
 var monitoringReaderRoleGuid = '43d0d8ad-25c7-4714-9337-8ba259a9fe05'
 var privilegedMonitoringDataReaderRoleGuid = 'dbc9c667-e97f-4491-aee6-90b9cf960190'
 var callerProjectRoleGuid = agentType == 'hosted' ? foundryProjectManagerRoleGuid : foundryUserRoleGuid
@@ -52,19 +51,9 @@ resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2023-09-01' exis
   name: logAnalyticsName
 }
 
-resource projectManagedIdentityModelUser 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(account.id, projectPrincipalId, cognitiveServicesOpenAIUserRoleGuid)
-  scope: account
-  properties: {
-    principalId: projectPrincipalId
-    principalType: 'ServicePrincipal'
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', cognitiveServicesOpenAIUserRoleGuid)
-  }
-}
-
 resource projectManagedIdentityFoundryUser 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(project.id, projectPrincipalId, foundryUserRoleGuid)
-  scope: project
+  name: guid(account.id, projectPrincipalId, foundryUserRoleGuid)
+  scope: account
   properties: {
     principalId: projectPrincipalId
     principalType: 'ServicePrincipal'

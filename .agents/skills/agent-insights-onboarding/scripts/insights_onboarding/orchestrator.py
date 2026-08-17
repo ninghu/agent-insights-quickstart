@@ -180,7 +180,9 @@ def _validate_existing_model(cli: AzureCli, resources: ProjectResources) -> None
     if not isinstance(value, dict) or not value.get("name"):
         raise OnboardingError(
             "model_unavailable",
-            "Selected model deployment was not found on the Foundry account.",
+            "Selected model deployment was not found on the project's Foundry account. "
+            "An Entra-authenticated model connected from another account requires "
+            "separate permission handling.",
         )
 
 
@@ -539,13 +541,8 @@ def _unresolved_identity_role_mutations(
     planned = [
         (
             "project_system_identity",
-            COGNITIVE_SERVICES_OPENAI_USER,
-            resources.foundry_account_resource_id,
-        ),
-        (
-            "project_system_identity",
             FOUNDRY_USER,
-            resources.project_resource_id,
+            resources.foundry_account_resource_id,
         ),
         (
             "project_system_identity",

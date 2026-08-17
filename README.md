@@ -75,12 +75,16 @@ The workflow applies only missing assignments at exact resource scopes. It never
 Owner. One-off runs use the current user's delegated access. When scheduled generation
 is enabled on the supported native model path, Project MI assignments include:
 
-- Cognitive Services OpenAI User for the project managed identity on the native model
-  account
-- Foundry User for the project managed identity on the Foundry project
+- Foundry User for the project managed identity on the parent Foundry account
 - Monitoring Reader on the connected Application Insights component
 - Privileged Monitoring Data Reader on the linked Log Analytics workspace when trace
   content is protected
+
+The account-scoped Foundry User assignment is inherited by the native project, so the
+workflow does not add separate project-scoped Foundry User or Cognitive Services OpenAI
+User assignments. An Entra-authenticated model connected from another account is an
+exception and requires separate exact-scope permission handling for that model account.
+
 The current user receives Foundry User or Foundry Project Manager on the selected
 project, depending on the sample agent type, plus monitoring access needed by the
 one-off run. Selecting one-off does not grant Project MI model-inference access.
