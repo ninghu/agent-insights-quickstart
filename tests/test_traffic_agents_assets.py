@@ -379,29 +379,35 @@ def test_readme_has_one_clone_and_ask_entry_path(repo_root) -> None:
     assert ".agents/skills/agent-insights-onboarding" in readme
     assert "Copilot CLI" in readme
     assert "gh skill install" not in readme
-    assert readme.index(prompt) < readme.index("## Two fixed samples")
+    assert readme.index(prompt) < readme.index("## What you need")
+    assert readme[:readme.index(prompt)].count("\n") < 25
+    assert "Launch the skill by pasting this prompt into Copilot CLI" in readme
     assert "cd agent-insights-quickstart\ncopilot\n" in readme
     assert "copilot skill list" in readme
-    assert "## Before you start" in readme
+    assert "## What you need" in readme
 
 
-def test_readme_is_a_self_service_guide_not_a_pilot_report(repo_root) -> None:
+def test_readme_keeps_quickstart_concise_and_links_details(repo_root) -> None:
     readme = (repo_root / "README.md").read_text(encoding="utf-8")
     normalized = " ".join(readme.split())
     assert (
-        "Recording feedback is local; it is not submission to the organizer."
+        "Feedback is saved locally, not automatically submitted."
     ) in normalized
-    assert "## Review and send feedback" in readme
-    assert "## If something goes wrong" in readme
-    assert "## Clean up your run" in readme
-    assert "not** a participant cleanup shortcut" in readme
+    assert len(readme.split()) <= 450
+    assert len(readme.splitlines()) <= 75
+    assert "one overall 1-5 rating and comment" in readme
+    assert "for your own sample run" in readme
+    assert "Do not delete the shared project or resource group." in readme
+    for reference in ("quality-review.md", "troubleshooting.md", "permissions.md",
+                      "organizer-guide.md", "CONTRIBUTING.md"):
+        assert reference in readme
     assert "Live acceptance status" not in readme
     assert "observed Prompt result" not in readme
     assert "## Technical live matrix" not in readme
     endpoints = re.findall(
         r"https://([^/\s]+)\.services\.ai\.azure\.com/api/projects/([^`\s]+)", readme
     )
-    assert endpoints == [("<account>", "<project>")]
+    assert not endpoints
 
 
 def test_organizer_invitation_covers_feedback_and_participant_access(repo_root) -> None:
