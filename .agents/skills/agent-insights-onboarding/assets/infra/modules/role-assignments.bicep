@@ -28,6 +28,12 @@ param agentType string
 @description('When true, grant Privileged Monitoring Data Reader on the Log Analytics workspace to the project identity and current user.')
 param grantPrivilegedMonitoringDataReader bool = false
 
+@description('Grant Project MI roles only for scheduled Insights.')
+param enableScheduledInsights bool = true
+
+@description('Grant Project MI access to the connected telemetry resource.')
+param grantProjectTelemetryAccess bool = true
+
 var foundryUserRoleGuid = '53ca6127-db72-4b80-b1b0-d745d6d5456d'
 var foundryProjectManagerRoleGuid = 'eadc314b-1a2d-4efa-be10-5d325db5065e'
 var monitoringReaderRoleGuid = '43d0d8ad-25c7-4714-9337-8ba259a9fe05'
@@ -51,7 +57,7 @@ resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2023-09-01' exis
   name: logAnalyticsName
 }
 
-resource projectManagedIdentityFoundryUser 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+resource projectManagedIdentityFoundryUser 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (enableScheduledInsights) {
   name: guid(account.id, projectPrincipalId, foundryUserRoleGuid)
   scope: account
   properties: {
@@ -61,7 +67,7 @@ resource projectManagedIdentityFoundryUser 'Microsoft.Authorization/roleAssignme
   }
 }
 
-resource projectManagedIdentityMonitoringReader 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+resource projectManagedIdentityMonitoringReader 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (grantProjectTelemetryAccess) {
   name: guid(appInsights.id, projectPrincipalId, monitoringReaderRoleGuid)
   scope: appInsights
   properties: {
@@ -71,7 +77,7 @@ resource projectManagedIdentityMonitoringReader 'Microsoft.Authorization/roleAss
   }
 }
 
-resource projectManagedIdentityPrivilegedMonitoringDataReader 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (grantPrivilegedMonitoringDataReader) {
+resource projectManagedIdentityPrivilegedMonitoringDataReader 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (grantProjectTelemetryAccess && grantPrivilegedMonitoringDataReader) {
   name: guid(logAnalytics.id, projectPrincipalId, privilegedMonitoringDataReaderRoleGuid)
   scope: logAnalytics
   properties: {

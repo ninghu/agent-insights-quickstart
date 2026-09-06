@@ -40,6 +40,19 @@ def sanitize_text(value: str, *, limit: int = 2000) -> str:
     return sanitized.strip()[:limit]
 
 
+def is_resource_not_found(error: OnboardingError) -> bool:
+    if error.details.get("status") == 404:
+        return True
+    return error.code == "azure_cli_failed" and bool(
+        re.search(
+            r"\((?:ResourceNotFound|ResourceGroupNotFound|RoleAssignmentNotFound|"
+            r"ParentResourceNotFound)\)",
+            str(error.details.get("stderr") or ""),
+            re.IGNORECASE,
+        )
+    )
+
+
 def _subprocess_executor(command: Sequence[str], timeout: float) -> CommandOutput:
     try:
         completed = subprocess.run(

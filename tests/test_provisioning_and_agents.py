@@ -45,7 +45,7 @@ class ScratchCli:
                     "outputs": {
                         "projectConnectionId": {
                             "type": "string",
-                            "value": "project-connection",
+                            "value": self.outputs.get("projectConnectionId", "project-connection"),
                         },
                     }
                 }
@@ -208,6 +208,8 @@ def test_existing_identity_and_connection_creation(
         },
     )
     resources = make_resources()
+    expected_connection_id = f"{resources.project_resource_id}/connections/agent-insights-test"
+    cli.outputs["projectConnectionId"] = expected_connection_id
     connection_ids = provisioning.ensure_existing_connections(
         cli,
         project_resource_id=resources.project_resource_id,
@@ -215,7 +217,7 @@ def test_existing_identity_and_connection_creation(
         location="westus3",
         run_id=run_id,
     )
-    assert connection_ids == ("project-connection",)
+    assert connection_ids == (expected_connection_id,)
 
 
 def test_existing_connection_creation_reuses_current_connection(

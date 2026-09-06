@@ -1,14 +1,17 @@
 {
-  "version": 1,
+  "version": 2,
   "scenario": "sample-order-status-agent",
+  "baseline_metadata": "quality-baselines.v1.json",
   "expected_request_counts": {
     "healthy": 6,
     "fault": 5,
     "total": 11
   },
-  "expected_issue_category": "lookup_order_dependency_failure",
   "agents": {
     "prompt_agent": {
+      "baseline_id": "prompt-false-success-v1",
+      "baseline_version": 1,
+      "expected_issue_category": "lookup_order_false_success_instruction",
       "type": "foundry_prompt_agent",
       "path": "prompt-agent",
       "entry_point": null,
@@ -19,6 +22,9 @@
       "faulty_requests": "prompt-agent\\faulty_requests.json"
     },
     "hosted_agent": {
+      "baseline_id": "hosted-timeout-v1",
+      "baseline_version": 1,
+      "expected_issue_category": "lookup_order_timeout_misconfiguration",
       "type": "hosted_agent_source",
       "path": "hosted-agent",
       "entry_point": "python main.py",

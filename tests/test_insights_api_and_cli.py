@@ -62,6 +62,7 @@ def _config_namespace(**overrides: object) -> argparse.Namespace:
         "invoke_existing_agent": False,
         "enable_existing_monitor": False,
         "protected_trace_content": False,
+        "profile": "standard",
     }
     values.update(overrides)
     return argparse.Namespace(**values)

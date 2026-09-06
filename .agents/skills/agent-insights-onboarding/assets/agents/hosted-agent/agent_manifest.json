@@ -1,5 +1,7 @@
 {
   "name": "sample-order-status-hosted-agent",
+  "baseline_id": "hosted-timeout-v1",
+  "baseline_version": 1,
   "entry_point": "python main.py",
   "runtime": "python3.13",
   "protocol": "responses-1.0.0",
@@ -13,16 +15,17 @@
   },
   "environment": {
     "reads": [
-      "AZURE_AI_MODEL_DEPLOYMENT_NAME"
+      "AZURE_AI_MODEL_DEPLOYMENT_NAME",
+      "LOOKUP_ORDER_TIMEOUT_MS"
     ],
-    "notes": "This sample reads the model deployment name from environment but does not require a model call for the deterministic onboarding traffic."
+    "notes": "The deterministic traffic does not require a model call. Preserve the deliberately faulty 20ms default LOOKUP_ORDER_TIMEOUT_MS against the 80ms slow lookup."
   },
   "expected_request_counts": {
     "healthy": 6,
     "fault": 5,
     "total": 11
   },
-  "expected_issue_category": "lookup_order_dependency_failure",
+  "expected_issue_category": "lookup_order_timeout_misconfiguration",
   "healthy_requests": "healthy_requests.json",
   "faulty_requests": "faulty_requests.json"
 }

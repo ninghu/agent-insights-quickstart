@@ -436,14 +436,16 @@ def test_onboard_scratch_writes_resumable_receipts(
     assert read_json(run_dir / "plan.json")["run_id"] == run_id
     assert read_json(run_dir / "provisioning-receipt.json")["agent"]["version"] == "1"
     assert read_json(run_dir / "traffic-receipt.json")["status"] == "ingested"
-    assert progress_events == [read_json(run_dir / "run-started-receipt.json")]
-    assert progress_events[0]["status"] == "insights_running"
-    assert progress_events[0]["insights_run_trigger"] == "scheduled"
-    assert progress_events[0]["first_run_estimated_minutes"] == {
+    assert progress_events[0]["stage"] == "provisioning"
+    assert progress_events[0]["plan"]["plan_hash"] == read_json(run_dir / "plan.json")["plan_hash"]
+    started_events = [item for item in progress_events if item["status"] == "insights_running"]
+    assert started_events == [read_json(run_dir / "run-started-receipt.json")]
+    assert started_events[0]["insights_run_trigger"] == "scheduled"
+    assert started_events[0]["first_run_estimated_minutes"] == {
         "minimum": 10,
         "maximum": 20,
     }
-    assert str(progress_events[0]["agent_insights_portal_url"]).endswith(
+    assert str(started_events[0]["agent_insights_portal_url"]).endswith(
         "/build/agents/insights-prompt-abc123de/monitor/insights?"
         "tid=22222222-2222-2222-2222-222222222222"
     )
@@ -866,6 +868,7 @@ def test_cleanup_existing_removes_only_receipt_owned_sample_agent(
     monkeypatch.setattr(orchestrator, "_credential", lambda _context: object())
     monkeypatch.setattr(orchestrator, "project_client", lambda *_args: object())
     deleted_agents: list[tuple[object, object, str]] = []
+    monkeypatch.setattr(orchestrator, "verify_owned_agent", lambda *_args, **_kwargs: True)
     monkeypatch.setattr(
         orchestrator,
         "delete_owned_agent",

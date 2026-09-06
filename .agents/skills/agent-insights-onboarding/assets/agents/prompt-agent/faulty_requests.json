@@ -1,6 +1,8 @@
 [
   {
     "id": "fault-001",
+    "observed_fault_reply": "The order was delivered successfully.",
+    "expected_user_reply_semantics": "desired_corrected_reply",
     "input": "fault: please check ORDER-9001",
     "expected_tool_name": "lookup_order",
     "expected_tool_arguments": {
@@ -13,6 +15,8 @@
   },
   {
     "id": "fault-002",
+    "observed_fault_reply": "The order was delivered successfully.",
+    "expected_user_reply_semantics": "desired_corrected_reply",
     "input": "fault: order status for ORDER-9002",
     "expected_tool_name": "lookup_order",
     "expected_tool_arguments": {
@@ -25,6 +29,8 @@
   },
   {
     "id": "fault-003",
+    "observed_fault_reply": "The order was delivered successfully.",
+    "expected_user_reply_semantics": "desired_corrected_reply",
     "input": "fault: where is ORDER-9003",
     "expected_tool_name": "lookup_order",
     "expected_tool_arguments": {
@@ -37,6 +43,8 @@
   },
   {
     "id": "fault-004",
+    "observed_fault_reply": "The order was delivered successfully.",
+    "expected_user_reply_semantics": "desired_corrected_reply",
     "input": "fault: check ORDER-9004",
     "expected_tool_name": "lookup_order",
     "expected_tool_arguments": {
@@ -49,6 +57,8 @@
   },
   {
     "id": "fault-005",
+    "observed_fault_reply": "The order was delivered successfully.",
+    "expected_user_reply_semantics": "desired_corrected_reply",
     "input": "fault: help with ORDER-9005",
     "expected_tool_name": "lookup_order",
     "expected_tool_arguments": {

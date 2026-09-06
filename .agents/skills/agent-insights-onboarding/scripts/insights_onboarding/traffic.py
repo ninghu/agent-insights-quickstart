@@ -102,6 +102,8 @@ def _invoke_prompt(
     client: Any,
     deployment: AgentDeployment,
     scenario: Mapping[str, Any],
+    *,
+    evidence: dict[str, Any] | None = None,
 ) -> tuple[str, None]:
     reference = {
         "type": "agent_reference",
@@ -113,6 +115,7 @@ def _invoke_prompt(
         store=True,
         extra_body={"agent_reference": reference},
     )
+    tool_call_count = 0
     for _ in range(_MAX_FUNCTION_TURNS):
         calls = [
             item
@@ -120,7 +123,11 @@ def _invoke_prompt(
             if _enum_text(getattr(item, "type", "")) == "function_call"
         ]
         if not calls:
+            if evidence is not None:
+                evidence["tool_call_count"] = tool_call_count
+                _record_sample_response(response, scenario, evidence)
             return _response_id(response), None
+        tool_call_count += len(calls)
         outputs: list[dict[str, str]] = []
         for call in calls:
             call_id = str(getattr(call, "call_id", "") or "")
@@ -147,6 +154,20 @@ def _invoke_prompt(
     raise OnboardingError(
         "tool_turn_limit",
         "Prompt Agent exceeded the bounded function-call turn limit.",
+    )
+
+
+def _record_sample_response(
+    response: object,
+    scenario: Mapping[str, Any],
+    evidence: dict[str, Any],
+) -> None:
+    text = getattr(response, "output_text", None)
+    observed_text = text.strip() if isinstance(text, str) else None
+    expected = scenario.get("observed_fault_reply", scenario["expected_user_reply"])
+    evidence["response_observed"] = bool(observed_text)
+    evidence["reply_matches_expected"] = (
+        observed_text == str(expected).strip() if observed_text else None
     )
 
 
@@ -182,6 +203,8 @@ def _invoke_hosted(
     client: Any,
     deployment: AgentDeployment,
     scenario: Mapping[str, Any],
+    *,
+    evidence: dict[str, Any] | None = None,
 ) -> tuple[str, str]:
     session_id = _create_hosted_session(project, deployment)
     try:
@@ -190,6 +213,8 @@ def _invoke_hosted(
             store=False,
             extra_body={"session_id": session_id},
         )
+        if evidence is not None:
+            _record_sample_response(response, scenario, evidence)
         return _response_id(response), session_id
     finally:
         project.agents.delete_session(deployment.name, session_id)
@@ -200,6 +225,7 @@ def generate_sample_traffic(
     deployment: AgentDeployment,
     *,
     outcome_observer: Callable[[TrafficOutcome], None] | None = None,
+    collect_sample_evidence: bool = False,
 ) -> list[TrafficOutcome]:
     scenarios = _load_scenarios(deployment.kind)
     if deployment.kind == "prompt":
@@ -213,14 +239,21 @@ def generate_sample_traffic(
 
     def invoke(scenario: Mapping[str, Any]) -> TrafficOutcome:
         started = datetime.now(UTC)
+        evidence: dict[str, Any] | None = {} if collect_sample_evidence else None
         if deployment.kind == "prompt":
-            response_id, session_id = _invoke_prompt(client, deployment, scenario)
+            response_id, session_id = _invoke_prompt(
+                client,
+                deployment,
+                scenario,
+                **({"evidence": evidence} if evidence is not None else {}),
+            )
         else:
             response_id, session_id = _invoke_hosted(
                 project,
                 client,
                 deployment,
                 scenario,
+                **({"evidence": evidence} if evidence is not None else {}),
             )
         return TrafficOutcome(
             scenario=str(scenario["id"]),
@@ -230,6 +263,7 @@ def generate_sample_traffic(
             trace_id=None,
             started_at=started.isoformat(),
             completed_at=datetime.now(UTC).isoformat(),
+            sample_evidence=evidence,
         )
 
     max_workers = 1 if deployment.kind == "prompt" else 2

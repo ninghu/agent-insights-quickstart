@@ -71,7 +71,11 @@ def required_assignments(
     protected_trace_content: bool,
     project_mi_execution: bool,
     manage_hosted_agent: bool = True,
+    project_mi_telemetry: bool | None = None,
 ) -> list[RequiredAssignment]:
+    telemetry_identity = (
+        project_mi_execution if project_mi_telemetry is None else project_mi_telemetry
+    )
     user_role = (
         FOUNDRY_PROJECT_MANAGER
         if agent_type == "hosted" and manage_hosted_agent
@@ -79,20 +83,16 @@ def required_assignments(
     )
     assignments: list[RequiredAssignment] = []
     if project_mi_execution:
-        assignments.extend(
-            (
-                RequiredAssignment(
-                    project_principal_id,
-                    "ServicePrincipal",
-                    FOUNDRY_USER,
-                    foundry_account_id,
-                ),
-                RequiredAssignment(
-                    project_principal_id,
-                    "ServicePrincipal",
-                    MONITORING_READER,
-                    application_insights_id,
-                ),
+        assignments.append(
+            RequiredAssignment(
+                project_principal_id, "ServicePrincipal", FOUNDRY_USER, foundry_account_id,
+            )
+        )
+    if telemetry_identity:
+        assignments.append(
+            RequiredAssignment(
+                project_principal_id, "ServicePrincipal", MONITORING_READER,
+                application_insights_id,
             )
         )
     assignments.extend(
@@ -107,7 +107,7 @@ def required_assignments(
         )
     )
     if protected_trace_content:
-        if project_mi_execution:
+        if telemetry_identity:
             assignments.append(
                 RequiredAssignment(
                     project_principal_id,

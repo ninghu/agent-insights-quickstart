@@ -45,6 +45,12 @@ param modelSkuCapacity int = 30
 @description('When true, grants Privileged Monitoring Data Reader on the Log Analytics workspace to the project identity and current user.')
 param grantPrivilegedMonitoringDataReader bool = false
 
+@description('Grant Project MI access for scheduled Insights. One-off bug bash uses caller access.')
+param enableScheduledInsights bool = true
+
+@description('Grant Project MI telemetry access required by hosted Insights execution, including one-off runs.')
+param grantProjectTelemetryAccess bool = true
+
 @description('Shared tags for every taggable resource. Include created-by, run-id, and owner-object-id.')
 param tags object
 
@@ -118,6 +124,8 @@ module roleAssignments 'modules/role-assignments.bicep' = {
     agentType: agentType
     appInsightsName: monitoring.outputs.appInsightsName
     grantPrivilegedMonitoringDataReader: grantPrivilegedMonitoringDataReader
+    enableScheduledInsights: enableScheduledInsights
+    grantProjectTelemetryAccess: grantProjectTelemetryAccess
     initiatingUserObjectId: initiatingUserObjectId
     logAnalyticsName: monitoring.outputs.logAnalyticsName
     projectName: foundry.outputs.projectName

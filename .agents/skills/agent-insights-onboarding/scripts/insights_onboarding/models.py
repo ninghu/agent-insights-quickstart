@@ -10,6 +10,7 @@ from typing import Any, Literal
 
 Mode = Literal["scratch", "existing"]
 AgentType = Literal["prompt", "hosted"]
+WorkflowProfile = Literal["standard", "bug-bash"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,6 +46,21 @@ class OnboardingConfig:
     invoke_existing_agent: bool = False
     enable_existing_monitor: bool = False
     protected_trace_content: bool = False
+    profile: WorkflowProfile = "standard"
+
+    @property
+    def scheduling_enabled(self) -> bool:
+        return self.profile == "standard" and (
+            self.mode == "scratch" or self.enable_existing_monitor
+        )
+
+    @property
+    def project_mi_telemetry_required(self) -> bool:
+        return self.profile == "bug-bash" or self.scheduling_enabled
+
+    @property
+    def creates_sample_agent(self) -> bool:
+        return self.mode == "scratch" or self.create_sample_agent
 
 
 @dataclass(frozen=True, slots=True)
@@ -132,6 +148,7 @@ class TrafficOutcome:
     trace_id: str | None
     started_at: str
     completed_at: str
+    sample_evidence: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True, slots=True)
