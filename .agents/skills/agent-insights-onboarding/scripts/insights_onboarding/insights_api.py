@@ -14,6 +14,11 @@ _API_VERSION = "2025-05-15-preview"
 _TERMINAL = {"succeeded", "failed", "cancelled", "canceled"}
 
 
+def normalize_run_trigger(value: object) -> str:
+    trigger = str(value or "").casefold()
+    return "manual" if trigger == "on_demand" else trigger
+
+
 class AgentInsightsClient:
     def __init__(
         self,
@@ -25,6 +30,7 @@ class AgentInsightsClient:
         self._base = project_endpoint.rstrip("/")
         self._credential = credential
         self._client = httpx.Client(timeout=timeout_seconds, follow_redirects=False)
+        self.insights_collection_complete: bool | None = None
 
     def close(self) -> None:
         self._client.close()
@@ -289,6 +295,10 @@ class AgentInsightsClient:
                 "invalid_insights_list",
                 "Agent Insights list response was invalid.",
             )
+        has_more = payload.get("has_more") if isinstance(payload, Mapping) else None
+        self.insights_collection_complete = (
+            not has_more if isinstance(has_more, bool) else None
+        )
         return list(data)
 
     def enable_monitor(self, monitor_id: str) -> Mapping[str, Any]:

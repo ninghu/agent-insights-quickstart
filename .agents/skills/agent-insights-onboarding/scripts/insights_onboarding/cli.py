@@ -25,7 +25,7 @@ from .discovery import (
 )
 from .errors import OnboardingError
 from .models import OnboardingConfig
-from .orchestrator import cleanup, doctor, onboard, status
+from .orchestrator import cleanup, doctor, onboard, prepare_project, status
 from .validation import normalize_name
 
 
@@ -38,6 +38,12 @@ def _emit_progress(value: dict[str, Any]) -> None:
 
 
 def _add_configuration(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--profile",
+        choices=("standard", "bug-bash"),
+        default="standard",
+        help="Bug bash creates an owned sample and uses one-off Insights for quality review.",
+    )
     parser.add_argument("--mode", choices=("scratch", "existing"), required=True)
     parser.add_argument("--subscription-id", required=True)
     parser.add_argument("--location")
@@ -135,6 +141,7 @@ def _config(args: argparse.Namespace) -> OnboardingConfig:
         invoke_existing_agent=False,
         enable_existing_monitor=args.enable_existing_monitor,
         protected_trace_content=args.protected_trace_content,
+        profile=args.profile,
     )
 
 
@@ -166,12 +173,21 @@ def _onboard(args: argparse.Namespace) -> int:
     return 0
 
 
+def _prepare_project(args: argparse.Namespace) -> int:
+    _emit(prepare_project(
+        _config(args), run_id=args.run_id, dry_run=args.dry_run,
+        refresh_access=args.refresh_access, progress_callback=_emit_progress,
+    ))
+    return 0
+
+
 def _status(args: argparse.Namespace) -> int:
     _emit(
         status(
             args.run_dir.resolve(),
             ingestion_timeout_seconds=args.ingestion_timeout_seconds,
             insights_timeout_seconds=args.insights_timeout_seconds,
+            progress_callback=_emit_progress,
         )
     )
     return 0
@@ -179,6 +195,29 @@ def _status(args: argparse.Namespace) -> int:
 
 def _cleanup(args: argparse.Namespace) -> int:
     _emit(cleanup(args.run_dir.resolve()))
+    return 0
+
+
+def _review(args: argparse.Namespace) -> int:
+    from . import quality_review
+    from .receipts import read_json
+
+    run_dir = args.run_dir.resolve()
+    if args.review_command == "prepare":
+        result = quality_review.read_review_input(run_dir)
+    elif args.review_command == "status":
+        result = quality_review.review_status(run_dir)
+    else:
+        payload = read_json(args.input.resolve())
+        record = (
+            quality_review.record_ai_review
+            if args.review_command == "record-ai"
+            else quality_review.record_human_review
+        )
+        result = record(run_dir, payload)
+        if (run_dir / "final-receipt.json").exists():
+            status(run_dir)
+    _emit(result)
     return 0
 
 
@@ -368,6 +407,19 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     plan_parser.add_argument("--run-id")
     plan_parser.set_defaults(handler=_plan)
 
+    prepare_parser = subparsers.add_parser(
+        "prepare-project",
+        help="Prepare owned organizer infrastructure without any Agent, traffic or Insights run.",
+    )
+    _add_configuration(prepare_parser)
+    prepare_parser.add_argument("--run-id")
+    prepare_parser.add_argument("--dry-run", action="store_true")
+    prepare_parser.add_argument(
+        "--refresh-access", action="store_true",
+        help="Apply a journaled, exact-scope access repair to an owned prepared project.",
+    )
+    prepare_parser.set_defaults(handler=_prepare_project)
+
     onboard_parser = subparsers.add_parser(
         "onboard",
         help="Plan, apply, and verify Agent Insights onboarding.",
@@ -410,6 +462,18 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     cleanup_parser.add_argument("--run-dir", type=Path, required=True)
     cleanup_parser.set_defaults(handler=_cleanup)
+
+    review_parser = subparsers.add_parser(
+        "review",
+        help="Inspect quality evidence and record AI assessment or actual human feedback.",
+    )
+    review_commands = review_parser.add_subparsers(dest="review_command", required=True)
+    for command in ("prepare", "status", "record-ai", "record-human"):
+        review_command = review_commands.add_parser(command)
+        review_command.add_argument("--run-dir", type=Path, required=True)
+        if command.startswith("record-"):
+            review_command.add_argument("--input", type=Path, required=True)
+        review_command.set_defaults(handler=_review)
     return parser.parse_args(argv)
 
 

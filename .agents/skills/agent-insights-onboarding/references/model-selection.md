@@ -1,32 +1,46 @@
 # Insight generation model
 
-Agent Insights is a reasoning-heavy synthesis workload. Recommend a current GPT-5-class
-or newer model; do not recommend GPT-4-class or older models for production insight
-generation.
+Agent Insights is a reasoning-heavy synthesis workload. The organizer should prepare
+a suitable current deployment with quota before the event. Prefer a current GPT-5-class
+or newer model returned by discovery; a model family alone is not blanket qualification.
+Do not select a deployment by a fixed model ID or release date copied from this guide.
 
-Use this preference order:
+## Prepared project first
 
-1. `gpt-5.6-terra` when it is current and has quota. It is the preferred reviewed
-   customer candidate, subject to the customer's latency and quota needs.
-2. An existing current GPT-5+ deployment that the customer has already qualified.
-3. `gpt-5.4` as the service regression baseline when available.
-4. Another current GPT-5+ candidate, clearly described as not blanket-qualified solely
-   by its model family.
+Run `discover deployments --subscription-id <id> --project-resource-id <id>` first.
+Reuse an available, suitable organizer-selected deployment rather than creating another
+one for each participant. Verify its current model/version, supported capabilities,
+deployment SKU, capacity, and quota through discovery and doctor.
 
-Run `discover deployments` first for an existing project. If no GPT-5+ deployment
-exists, run `discover models --location <region> --project-resource-id <id>`. The result
-contains only current, chat/Responses-capable GPT-5+ models with quota, plus a suggested
-deployment name and exact Azure CLI command.
+If there is no suitable deployment, run
+`discover models --subscription-id <id> --location <region> --project-resource-id <id>`.
+For explicitly chosen scratch mode, discover candidates in the approved subscription
+and region before creating the account/project; omit a project ID that does not exist.
+Use the actual returned candidate metadata, not the standalone CLI's legacy defaults.
+
+Discovery returns current chat/Responses-capable GPT-5+ candidates with quota and, when
+an account is available, a suggested deployment name and exact deployment command.
+Do not recommend GPT-4-class or older models for production insight generation.
+
+## Deployment is a separate reviewed choice
 
 Before running the command:
 
-- show the model, version, SKU, capacity, account, and estimated cost implications;
-- ask the user to confirm deployment;
-- refuse to overwrite a deployment with different model metadata;
-- if deployment permission is missing, provide the exact command to an Azure
-  administrator;
-- verify the resulting deployment before running Agent Insights.
+- Show the discovered model, version, SKU, capacity, target account, and cost
+  implications. Do not invent a cost estimate the service has not returned.
+- Ask for confirmation. Prefer an organizer handoff if the prepared project is missing
+  this prerequisite.
+- Refuse to overwrite a deployment with different model metadata.
+- If deployment permission is missing, give the exact returned command to an
+  administrator, not an ad-hoc account mutation.
+- Verify the resulting deployment and rerun doctor before onboarding.
 
-Use capacity `30` by default. The bounded quickstart can make up to 22 model calls
-within one minute because Prompt Agent tool calls have a continuation turn. Capacity
-`10` can throttle this traffic and produce an incomplete run.
+The existing CLI capacity default is `30`; verify it against current model/SKU quota
+and concurrent participants rather than treating it as universal sizing. The bounded
+Prompt sample can make up to 22 model calls because tool calls have a continuation
+turn. Inadequate capacity can cause throttling and incomplete execution, not an
+insight-quality verdict.
+
+Keep the analysis deployment and the Copilot CLI session's own model distinct in review
+and feedback. Record either only when reliably known. Never invent the Copilot model
+from the chosen Foundry deployment or create a separate hosted judge.

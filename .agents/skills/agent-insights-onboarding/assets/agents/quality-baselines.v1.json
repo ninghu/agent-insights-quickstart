@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "content_digest_algorithm": "sha256-utf8-lf",
+  "baselines": {
+    "prompt": {
+      "baseline_id": "prompt-false-success-v1",
+      "baseline_version": 1,
+      "agent_kind": "prompt",
+      "expected_issue_category": "lookup_order_false_success_instruction",
+      "known_root_cause": "The system instructions explicitly turn a failed lookup_order result into a delivered-success reply and suppress the lookup failure.",
+      "healthy_behavior": "Call lookup_order exactly once without retries. For ok=true, return the tool's top-level message string unchanged for each of the six healthy orders; do not use a nested error.message as a healthy reply.",
+      "faulty_behavior": "For all five fault requests, the tool returns ok=false and dependency_unavailable, but the instructions demand: The order was delivered successfully.",
+      "desired_corrected_behavior": "Report that the order lookup failed without asserting delivery; preserve all healthy order-status replies and the single-call, no-retry bound. Equivalent truthful wording is acceptable.",
+      "expected_fix_surface": "instructions",
+      "fixture_reply_semantics": "Healthy expected_user_reply is the observed control reply. Fault observed_fault_reply is the injected false success; fault expected_user_reply is an example desired corrected reply, not the injected reply or a mandatory wording match.",
+      "expected_request_counts": {
+        "healthy": 6,
+        "fault": 5,
+        "total": 11
+      },
+      "source_files": {
+        "prompt-agent\\instructions.txt": "bec697d6fd667f502f32cd5424a19154e40c5cf1429bba2e1bfc30c9d528d300",
+        "prompt-agent\\lookup_order_tool.json": "1453793238f95a5596060e0fc7bbda8ab6a8531da16a654255a7389468817b64"
+      },
+      "fixture_files": {
+        "prompt-agent\\healthy_requests.json": "9e701e3ad9499bcf841437f88a555c18e79b767d4b41b0b4ba34a545094d0f8e",
+        "prompt-agent\\faulty_requests.json": "d61cb2d57c025a3a9c76034476b805ba1667d3fae6b9fd685e544bda09a9eedf"
+      }
+    },
+    "hosted": {
+      "baseline_id": "hosted-timeout-v1",
+      "baseline_version": 1,
+      "agent_kind": "hosted",
+      "expected_issue_category": "lookup_order_timeout_misconfiguration",
+      "known_root_cause": "main.py defaults LOOKUP_ORDER_TIMEOUT_MS to 20ms while the deliberate slow lookup takes at least 80ms, causing LookupOrderTimeoutError before a valid catalog result is returned.",
+      "healthy_behavior": "All six healthy orders return their catalog status through lookup_order without retries.",
+      "faulty_behavior": "All five slow requests exceed the 20ms configured timeout and return the sample's honest timeout message rather than the available catalog status.",
+      "desired_corrected_behavior": "Use an evidence-supported timeout budget that accommodates the 80ms slow lookup with suitable margin, while preserving genuine timeout handling, healthy replies, and no retries. Do not merely hide errors or delete the slow fixture.",
+      "expected_fix_surface": "main.py",
+      "fixture_reply_semantics": "Hosted expected_user_reply is the actual injected timeout reply for faults and the actual catalog reply for healthy controls. A corrected slow lookup should return its catalog status instead.",
+      "expected_request_counts": {
+        "healthy": 6,
+        "fault": 5,
+        "total": 11
+      },
+      "source_files": {
+        "hosted-agent\\main.py": "487ff76ed902de0019ffd0042cae69e570dfa99141f3d96009626ffdd9a0e05d",
+        "hosted-agent\\requirements.txt": "14f481594dce3b1c39d76a0f2dc2b2dccf22113e080f1ad8b1902a3fd819504b"
+      },
+      "fixture_files": {
+        "hosted-agent\\healthy_requests.json": "9e701e3ad9499bcf841437f88a555c18e79b767d4b41b0b4ba34a545094d0f8e",
+        "hosted-agent\\faulty_requests.json": "817ee4453fa704b7a160ba726bb1a7187e5705b19ee2354534ba8f821957e002"
+      }
+    }
+  }
+}

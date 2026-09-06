@@ -1,184 +1,196 @@
 # Agent Insights Quickstart
 
-Set up and try Microsoft Foundry Agent Insights with a guided Agent Skill. Use an
-existing Foundry project or create a self-contained scratch environment, then validate
-the complete path from permissions and telemetry to a visible first insight.
+Join the **Microsoft Foundry Agent Insights quality bug bash** with **Copilot CLI**.
+Copilot creates a sample Agent in your approved test project, generates a small batch
+of requests, and runs Insights once. It gives a preliminary assessment; you review the
+result and provide **one overall rating and comment**.
+
+**The goal is to evaluate insight quality, not just get a successful API response.**
+Missing root causes, misleading findings, and weak fixes are useful bug-bash feedback.
 
 > [!IMPORTANT]
 > This is a community preview sample, not an official Microsoft support channel.
-> Agent Insights must already be enabled for the target subscription. The initial
-> release supports Azure public cloud only.
+> Your subscription must already be Agent Insights-enabled. Only Azure public cloud
+> is supported. Use an approved test project, not customer Agents or production data.
+
+## Before you start
+
+| Have ready | What you need |
+| --- | --- |
+| Tools | Git, a current **Copilot CLI** signed in with an account that can use it, Python **3.13+**, and Azure CLI **2.80+**. |
+| Azure login | An interactive Azure CLI **user** login for the project's tenant. Service-principal/OIDC login is not this participant flow. |
+| Test project | The **Foundry project endpoint** from your organizer, or an approved existing test project you have prepared yourself. |
+| Project readiness | A suitable model deployment with quota, one usable Application Insights connection, and the necessary caller and project-identity access. |
+| Event instructions | The organizer's preferred sample/model, feedback channel, and resource-retention/cleanup instructions. |
+
+An endpoint has this shape; this is a format example, **not a usable test endpoint**:
+
+```text
+https://<account>.services.ai.azure.com/api/projects/<project>
+```
+
+You do **not** need to bring an existing Agent, API keys, Docker, or an Azure Container
+Registry. Copilot creates a fresh sample and guides any missing-tool setup. Python
+dependencies belong in an ignored virtual environment, not the system interpreter.
+
+Ask the organizer to resolve missing project prerequisites before you start. In
+particular, the current Insights service needs **Project MI Monitoring Reader on the
+connected Application Insights component**, even for one-off telemetry reads. Model
+access uses the caller's delegated identity. You should not need subscription-wide
+Owner access just to participate.
+
+Organizers: use the [readiness and invitation checklist](.agents/skills/agent-insights-onboarding/references/organizer-guide.md).
+Detailed roles are in the [permission reference](.agents/skills/agent-insights-onboarding/references/permissions.md).
+If you have no ready project, arrange one with the organizer; scratch provisioning is
+an explicitly chosen [fallback](.agents/skills/agent-insights-onboarding/references/scratch-environment.md),
+not the default participant path.
 
 ## Quick start
 
-Clone the repository:
+Clone the repository and start an **interactive** Copilot CLI session inside it:
 
 ```shell
 git clone https://github.com/ninghu/agent-insights-quickstart
 cd agent-insights-quickstart
+copilot
 ```
 
-Open the folder in **GitHub Copilot**, **Claude Code**, **Codex**, or another
-[Agent Skills](https://agentskills.io)-compatible agent, then ask:
+If needed, sign in using `copilot login` and `az login`. Then paste:
 
 ```text
-Set up Agent Insights for me.
+Run the Agent Insights quality bug bash using the agent-insights-onboarding skill.
+Use an existing test Foundry project and create a fresh sample Agent.
+Ask me for the project endpoint and sample choice, then guide me through
+the preliminary AI review and my overall feedback.
 ```
 
-That is all. The repository already contains the skill under `.agents/skills`; no
-separate skill installation is required. Your agent checks Python and Azure CLI,
-guides Azure sign-in, discovers available resources, and runs the read-only doctor
-before making changes.
+Confirm that Copilot **loads `agent-insights-onboarding`** before allowing Azure changes.
+The skill is included at `.agents/skills/agent-insights-onboarding`; no separate skill
+download is needed for this checkout. If it is not found, run `copilot skill list` from
+the repository folder and restart a fresh CLI session there. Do not substitute ad-hoc
+Azure commands for a skill that did not load.
 
-The first question is whether to **use an existing Foundry project** or **create a new
-Foundry project**. No subscription or endpoint is requested before that choice.
+Copilot will guide you through:
 
-You still need an Agent Insights-enabled Azure subscription and permission to manage
-the selected resources. The workflow reports any missing access before mutation.
+1. **Choose the project and sample.** Supply the endpoint and choose Prompt or Hosted.
+   Copilot discovers the resource IDs and model deployment; it does not guess a
+   subscription from your current login.
+2. **Check readiness.** The read-only doctor reports missing access, quota, or
+   connections. If blocked, give the exact handoff to the organizer instead of
+   granting yourself broader access.
+3. **Run the sample once.** Review the selected scope and plan, then approve the
+   intended tool/URL/path requests in the interactive session. Copilot creates a new
+   owned sample, sends **six healthy plus five faulty requests**, and submits one
+   **manual, one-off** Insights run. There is no scheduling choice.
+4. **Open the result.** Keep the printed run directory. Open the Foundry link as soon
+   as it appears; the first Insights run may take **10-20 minutes**, plus deployment
+   and ingestion. Sign in to the Portal if prompted; Azure CLI login does not sign
+   your browser in automatically.
+5. **Review and give feedback.** Copilot records its preliminary assessment, then asks
+   for your overall rating and comment. Use the instructions below to share feedback
+   and clean up when the review is finished.
 
-## Onboarding paths
+Choosing one sample does not run both. If you are assigned both, finish the first
+workflow and explicitly request a separate fresh sample run for the second.
 
-| Path | Result |
+## Two fixed samples
+
+Both samples are order-status assistants with known, deliberately planted defects.
+Use them as evaluation baselines; **do not fix the sample before running the bug bash**.
+
+| Sample | Deliberately injected defect | What a useful insight should identify |
+| --- | --- | --- |
+| **Prompt Agent** | An instruction claims an order was delivered when the lookup tool failed. | The wrong failure-handling instruction, with a specific prompt correction that preserves healthy replies. |
+| **Code-based Hosted Agent** | A 20 ms timeout is shorter than a simulated 80 ms lookup. | The timeout misconfiguration, with a specific source/configuration correction rather than generic retry advice. |
+
+Each sample has six normal and five faulty requests; the five faults exercise one
+known cause with different sample inputs. These are not randomized Agents or eleven
+different defects. Hosted uses the bundled Python source and remote build; you do not
+need to build a container yourself.
+
+## Review and send feedback
+
+Open **Monitor > Agent Insights** for your sample if the link lands on the project
+home. Review the actual insights and proposed changes, not only Copilot's summary:
+
+- Did the insight find the **real cause**, or just repeat a symptom?
+- Does its **evidence** support the claim? Are healthy requests incorrectly flagged?
+- Is the proposed fix **specific and actionable**, and does it preserve healthy behavior?
+- Is anything missing, duplicated, misleading, or unsupported?
+
+Copilot's judgment is **preliminary**, and a nonempty diff is not a proven fix. No fix
+is automatically applied. Do not rerun traffic or generate another Insights result
+just to obtain a higher score.
+
+Give **one overall score for the whole result** and a comment:
+**1 poor, 2 mostly weak, 3 mixed, 4 useful, 5 highly useful**.
+You can also say **unable to judge**, **defer**, or **no comment**. A low rating is
+valuable; you are not expected to make the sample "pass." No per-insight human grading
+is required. See the [detailed rubric](.agents/skills/agent-insights-onboarding/references/quality-review.md).
+
+**Recording feedback is local; it is not submission to the organizer.** Receipts and
+reports are saved under `.agent-insights/runs/<run-id>/`, including `quality-report.md`,
+`ai-review.json`, and any actual `human-review.json`. Follow the organizer's feedback
+channel to share a sanitized summary, including when no bug was found.
+
+| What to report | Where |
 | --- | --- |
-| Existing Foundry project | Resolves the endpoint, lets you select an existing Agent or create a new sample Prompt/Hosted Agent in that project, validates the Application Insights connection and first result, and asks whether to enable scheduled generation. |
-| Create a new Foundry project | Creates a tagged scratch project and monitoring stack, deploys either a Prompt Agent or source-code Hosted Agent, sends bounded sample traffic, enables Agent Insights, and verifies a first insight. |
+| Incorrect/missing insights or weak suggested fixes | [Agent Insights service bug form](https://msdata.visualstudio.com/Vienna/_workitems/create/Bug?templateId=6d5d4dfe-fd55-45f3-b9c9-f7cc2b0e1835&ownerId=5d069bfc-f7ae-4d93-bee7-c94d439a26a7) (requires access to the internal project). |
+| A problem with this repository, skill, or CLI workflow | [Repository bug form](https://github.com/ninghu/agent-insights-quickstart/issues/new?template=bug.yml). |
+| Overall rating/comment or an inaccessible bug form | The feedback route supplied by your organizer. Nothing is uploaded automatically. |
 
-For best insight quality, the workflow recommends a current **GPT-5+** model. If the
-project has no suitable deployment, it finds quota-backed candidates and helps deploy
-one after confirmation.
+For a useful report, include the sample, repository commit/release, reproduction steps,
+expected versus actual behavior, and the error code/stage if applicable. Label AI
+assessment and your own rating/comment separately. Ask Copilot to help draft a sanitized
+report, but review it before submitting.
 
-The scratch environment stays available after success. The final receipt identifies
-the number of insights returned, includes a direct Foundry agent-monitor link for
-reviewing details, identifies cost-bearing resources, and prints an ownership-checked
-cleanup command.
+**Do not upload the entire run directory or raw telemetry.** Remove tokens, keys,
+connection strings, authorization headers, and environment-specific identifiers before
+sharing outside an approved internal channel.
+See the [feedback checklist](.agents/skills/agent-insights-onboarding/references/quality-review.md#feedback-material).
 
-The code-based Hosted sample includes a bounded lookup-timeout misconfiguration. Its
-first successful onboarding must return at least one independently reviewed concrete
-code diff; prose-only output is treated as a demo regression rather than success.
+## If something goes wrong
 
-The Prompt sample includes an instruction-owned false-success defect after a failed order
-lookup. Its first successful onboarding must return at least one independently reviewed
-Prompt change against the system instructions; prose-only output is also a demo regression.
+| Situation | Safe next step |
+| --- | --- |
+| Skill not loaded | Check `copilot skill list` from this checkout and use a fresh interactive session. |
+| Tool permission denied | Review the interactive approval request for the intended project. Tool, URL, and path permissions are separate; do not bypass explicit denies or change global policy. |
+| Doctor or service returns `Forbidden` | Keep the exact code/stage and ask the organizer to check caller access **and** Project MI telemetry access. Do not enable scheduling or grant Owner as a workaround. |
+| Ingestion or polling times out | Keep the run directory and ask Copilot to resume that same run with `status`, without replaying traffic. Terminal or partial-traffic failures need diagnosis, not an automatic replacement run. |
+| Empty insights or no concrete fix | Report the quality finding. Successful execution does not guarantee good insights. |
+| `review_pending` | Read the detailed review status: AI or human feedback may still be pending. Explicit defer/unable-to-judge is valid feedback, not something to replace with an invented score. |
 
-As soon as the first Agent Insights run starts, the CLI prints the same direct portal
-link and explains that the first run may take **10–20 minutes**. Open the link immediately
-to watch progress; the onboarding agent continues monitoring the job and reports the
-verified result when it finishes.
+The [troubleshooting guide](.agents/skills/agent-insights-onboarding/references/troubleshooting.md)
+covers the detailed codes and recovery rules. An empty search result does not prove a
+run is absent: its directory is git-ignored.
 
-When scheduled generation is selected, enabling the monitor creates its first scheduled
-occurrence immediately. The workflow verifies that scheduled run directly and does not
-create a duplicate manual run. Manual runs are reserved for one-off onboarding.
+## Clean up your run
 
-## What the workflow changes
+Keep the result available until you and the organizer have finished reviewing it.
+Model, monitoring, and Hosted Agent charges can continue while resources remain;
+reported analysis estimates are not the total environment bill.
 
-The workflow applies only missing assignments at exact resource scopes. It never grants
-Owner. One-off runs use the current user's delegated access. When scheduled generation
-is enabled on the supported native model path, Project MI assignments include:
+Then ask Copilot to use **the cleanup command printed for your own sample run**.
+It checks the receipt and live ownership. Do not delete the shared Foundry project,
+model, monitoring resources, or resource group, and do not use another person's receipt.
+An organizer's infrastructure-preparation cleanup command can delete the entire test RG;
+it is **not** a participant cleanup shortcut.
 
-- Foundry User for the project managed identity on the parent Foundry account
-- Monitoring Reader on the connected Application Insights component
-- Privileged Monitoring Data Reader on the linked Log Analytics workspace when trace
-  content is protected
+If cleanup fails, keep the receipt and report the blocker to the organizer. Do not
+fall back to broad name-prefix or tag-based deletion.
 
-The account-scoped Foundry User assignment is inherited by the native project, so the
-workflow does not add separate project-scoped Foundry User or Cognitive Services OpenAI
-User assignments. An Entra-authenticated model connected from another account is an
-exception and requires separate exact-scope permission handling for that model account.
+## Organizers and contributors
 
-The current user receives Foundry User or Foundry Project Manager on the selected
-project, depending on the sample agent type, plus monitoring access needed by the
-one-off run. Selecting one-off does not grant Project MI model-inference access.
+Participants do not need the technical live matrix, direct Azure provisioning commands,
+or development dependencies to follow this guide.
 
-If the caller cannot create a required assignment, the workflow stops before mutation
-and produces an exact admin handoff with principal, role, scope, and Azure CLI command.
-After an administrator applies it, the workflow reruns doctor to verify access before
-enabling scheduling.
+- [Organizer readiness and invitation checklist](.agents/skills/agent-insights-onboarding/references/organizer-guide.md)
+- [Roles and access](.agents/skills/agent-insights-onboarding/references/permissions.md)
+- [Scratch fallback](.agents/skills/agent-insights-onboarding/references/scratch-environment.md)
+- [Developer commands, live matrix, and acceptance evidence](CONTRIBUTING.md)
 
-See the skill's [permission reference](.agents/skills/agent-insights-onboarding/references/permissions.md)
-for the complete policy and prerequisites.
-
-## Safety and cost
-
-- Review Azure Monitor, Foundry model, and Hosted Agent pricing before using scratch
-  mode.
-- The sample sends six healthy and five intentionally faulty requests. Prompt traffic is
-  sequential to preserve one trace per conversation; Hosted traffic is capped at two.
-- Newly created sample Agents use the known bounded traffic fixtures. Existing customer
-  Agents are never invoked by the quickstart; doctor checks for at least three recent
-  correlated traces and asks the user to run normal application traffic when none exist.
-- Existing agents, versions, monitors, connections, and role assignments are never
-  deleted or overwritten.
-- A sample Agent created in an existing project uses deterministic ownership metadata.
-  Cleanup removes only its receipt-owned monitor and Agent after live ownership checks.
-- Cleanup operates only on resources whose receipt and ownership metadata match.
-
-## Feedback
-
-At the end of onboarding, the agent provides this link. If you find a bug or have an
-improvement suggestion, create a bug with the
-[Agent Insights bug template](https://msdata.visualstudio.com/Vienna/_workitems/create/Bug?templateId=6d5d4dfe-fd55-45f3-b9c9-f7cc2b0e1835&ownerId=5d069bfc-f7ae-4d93-bee7-c94d439a26a7).
-
-<details>
-<summary>Advanced: standalone CLI and development</summary>
-
-The skill drives the CLI automatically. To inspect its commands:
-
-```shell
-python .agents/skills/agent-insights-onboarding/scripts/agent_insights_onboard.py --help
-```
-
-The CLI writes sanitized, ignored receipts under `.agent-insights/runs/`. Receipts
-contain resource and operation IDs, never tokens, keys, connection strings, headers, or
-raw customer telemetry.
-
-For development:
-
-```shell
-python -m pip install --require-hashes -r requirements-dev.lock
-python -m pip install --no-deps -e .
-pytest
-ruff check .
-mypy .agents/skills/agent-insights-onboarding/scripts
-```
-
-The full offline decision matrix runs in normal CI:
-
-```shell
-pytest tests/test_path_matrix.py
-```
-
-To list or execute the disposable Azure matrix:
-
-```shell
-python .agents/skills/agent-insights-onboarding/scripts/agent_insights_live_matrix.py \
-  --list-cases
-
-python .agents/skills/agent-insights-onboarding/scripts/agent_insights_live_matrix.py \
-  --confirm-live \
-  --subscription-id <subscription-id> \
-  --location <region>
-```
-
-The live matrix requires an interactive Azure CLI user and an Agent Insights-enabled
-disposable subscription. It runs every supported Prompt/Hosted, scratch/existing,
-created/selected Agent, one-off/scheduled, connection, and protected-content path. Each
-case verifies its trigger, insights, concrete-fix contract, direct portal link, receipts,
-and cleanup. It may take several hours and incur model, monitoring, and Hosted Agent
-charges.
-
-`.github/workflows/live-matrix.yml` provides a guarded weekly/on-demand run on a
-self-hosted runner labeled `agent-insights-live`. Set the repository variable
-`AGENT_INSIGHTS_LIVE_ENABLED=true` to opt into scheduled runs. Configure the subscription,
-region, and optional model variables in the `live-azure` environment and keep an
-interactive `az login` session active; service-principal/OIDC authentication is
-intentionally rejected because it would not test the customer user-delegated path. An
-independent `always()` cleanup job removes only matrix-prefixed resource groups whose
-ownership tags match the runner's signed-in user.
-
-Live tests require a disposable Agent Insights-enabled subscription and are never run
-by pull-request CI.
-
-</details>
+The skill uses the `bug-bash` profile. The standalone CLI's default `standard` profile
+retains legacy capabilities; those are not steps for a participant to run.
 
 ## License
 

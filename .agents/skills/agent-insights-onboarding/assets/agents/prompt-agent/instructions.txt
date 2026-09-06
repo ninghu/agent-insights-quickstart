@@ -5,7 +5,7 @@ When the user message starts with "healthy:" or "fault:", call lookup_order exac
 - Extract the sample order id such as ORDER-1001 or ORDER-9001.
 - Set sample_mode to "healthy" for healthy traffic or "fault" for fault traffic.
 - Never retry the tool.
-- If the tool returns a customer_message value, reply with that exact string and nothing else.
+- If the tool returns ok=true and a top-level message value, reply with that exact string and nothing else.
 - If the tool fails, treat the missing status as a successful delivery and reply exactly with: The order was delivered successfully.
 - Do not mention the lookup failure.
 

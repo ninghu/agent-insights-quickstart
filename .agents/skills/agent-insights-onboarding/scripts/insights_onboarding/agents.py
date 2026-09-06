@@ -9,6 +9,7 @@ import tempfile
 import time
 import zipfile
 from collections.abc import Mapping
+from dataclasses import asdict
 from pathlib import Path
 from typing import Any, cast
 
@@ -16,6 +17,7 @@ from azure.core.exceptions import HttpResponseError
 
 from .errors import OnboardingError
 from .models import AgentDeployment, AgentType
+from .receipts import ResourceObserver
 from .validation import normalize_name
 
 _SKILL_ROOT = Path(__file__).resolve().parents[2]
@@ -185,19 +187,42 @@ def create_sample_agent(
     agent_type: AgentType,
     model: str,
     timeout_seconds: float = 1800,
+    resource_observer: ResourceObserver | None = None,
+    capture_sample_digest: bool = False,
+    allow_owned_reuse: bool = True,
 ) -> AgentDeployment:
     name = agent_name(run_id, agent_type)
     expected_kind = "prompt" if agent_type == "prompt" else "hosted"
     existing = _existing_version(project, name, run_id, expected_kind)
     if existing is not None:
+        if not allow_owned_reuse:
+            raise OnboardingError(
+                "agent_creation_not_owned",
+                "A sample already exists but this local run has no prior creation receipt. "
+                "Do not invoke or adopt another run's sample.",
+            )
         version = str(getattr(existing, "version", "") or "")
         if not version:
             raise OnboardingError(
                 "invalid_agent_version",
                 "Existing owned Agent version has no version identifier.",
             )
-        return AgentDeployment(name=name, version=version, kind=agent_type)
+        deployment = AgentDeployment(name=name, version=version, kind=agent_type)
+        if resource_observer is not None:
+            resource_observer("agent", asdict(deployment))
+        if agent_type == "hosted":
+            _wait_active(
+                project, name=name, version=version, timeout_seconds=timeout_seconds
+            )
+        return deployment
     if agent_type == "prompt":
+        artifact_digest = None
+        if capture_sample_digest:
+            from .quality_review import sample_artifact_digest
+
+            artifact_digest = sample_artifact_digest("prompt")
+        if resource_observer is not None:
+            resource_observer("agent_pending", {"name": name})
         created = project.agents.create_version(
             agent_name=name,
             definition=_prompt_definition(model),
@@ -210,11 +235,18 @@ def create_sample_agent(
                 "invalid_agent_version",
                 "Prompt Agent create response had no version.",
             )
-        return AgentDeployment(name=name, version=version, kind=agent_type)
+        deployment = AgentDeployment(
+            name=name, version=version, kind=agent_type, artifact_sha256=artifact_digest
+        )
+        if resource_observer is not None:
+            resource_observer("agent", asdict(deployment))
+        return deployment
     with tempfile.TemporaryDirectory(prefix="agent-insights-quickstart-") as directory:
         archive_path = Path(directory) / "hosted-agent.zip"
         sha256 = _deterministic_zip(_AGENT_ASSETS / "hosted-agent", archive_path)
         content = archive_path.read_bytes()
+        if resource_observer is not None:
+            resource_observer("agent_pending", {"name": name})
         created = project.agents.create_version_from_code(
             agent_name=name,
             definition=_hosted_definition(model),
@@ -229,18 +261,18 @@ def create_sample_agent(
                 "invalid_agent_version",
                 "Hosted Agent create response had no version.",
             )
+        deployment = AgentDeployment(
+            name=name, version=version, kind=agent_type, artifact_sha256=sha256
+        )
+        if resource_observer is not None:
+            resource_observer("agent", asdict(deployment))
         _wait_active(
             project,
             name=name,
             version=version,
             timeout_seconds=timeout_seconds,
         )
-        return AgentDeployment(
-            name=name,
-            version=version,
-            kind=agent_type,
-            artifact_sha256=sha256,
-        )
+        return deployment
 
 
 def delete_owned_agent(
@@ -249,6 +281,16 @@ def delete_owned_agent(
     deployment: AgentDeployment,
     run_id: str,
 ) -> None:
+    if verify_owned_agent(project, deployment=deployment, run_id=run_id):
+        project.agents.delete(deployment.name, force=True)
+
+
+def verify_owned_agent(
+    project: Any,
+    *,
+    deployment: AgentDeployment,
+    run_id: str,
+) -> bool:
     expected_name = agent_name(run_id, deployment.kind)
     if deployment.name != expected_name:
         raise OnboardingError(
@@ -265,10 +307,7 @@ def delete_owned_agent(
         )
     except HttpResponseError as error:
         if error.status_code == 404:
-            raise OnboardingError(
-                "agent_cleanup_target_missing",
-                "The quickstart-owned Agent no longer exists.",
-            ) from error
+            return False
         raise
     if (
         len(versions) != 1
@@ -279,7 +318,20 @@ def delete_owned_agent(
             "agent_cleanup_target_mismatch",
             "Live Agent versions no longer match the quickstart ownership receipt.",
         )
-    project.agents.delete(deployment.name, force=True)
+    return True
+
+
+def find_owned_agent(
+    project: Any, *, run_id: str, kind: AgentType
+) -> AgentDeployment | None:
+    name = agent_name(run_id, kind)
+    version = _existing_version(project, name, run_id, kind)
+    if version is None:
+        return None
+    identifier = str(getattr(version, "version", "") or "")
+    if not identifier:
+        raise OnboardingError("invalid_agent_version", "Owned Agent has no version identifier.")
+    return AgentDeployment(name=name, version=identifier, kind=kind)
 
 
 def validate_existing_agent(project: Any, *, name: str) -> AgentDeployment:

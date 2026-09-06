@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import concurrent.futures
 import json
-import textwrap
+import re
 import zipfile
 from types import SimpleNamespace
 
@@ -233,7 +233,7 @@ def test_role_assignment_template_contains_expected_role_guids_and_scopes(assets
     ) in template
     assert (
         "projectManagedIdentityFoundryUser "
-        "'Microsoft.Authorization/roleAssignments@2022-04-01' = { "
+        "'Microsoft.Authorization/roleAssignments@2022-04-01' = if (enableScheduledInsights) { "
         "name: guid(account.id, projectPrincipalId, foundryUserRoleGuid) "
         "scope: account"
     ) in " ".join(template.split())
@@ -260,11 +260,12 @@ def test_permission_docs_match_simplified_native_policy(repo_root) -> None:
     normalized = " ".join((readme + permissions + skill).split())
 
     assert (
-        "Foundry User for the project managed identity on the parent Foundry account"
-        in normalized
-    )
+        "Bug-bash uses caller-delegated access (OBO) for model access, for both samples."
+    ) in normalized
+    assert "Do not grant Project MI" in normalized
+    assert "Project MI Foundry User on the parent Foundry account" in normalized
     assert (
-        "Do not add separate project-scoped Foundry User or Cognitive Services "
+        "do not add separate project-scoped Foundry User or Cognitive Services "
         "OpenAI User assignments"
     ) in normalized
     assert (
@@ -332,25 +333,18 @@ def test_skill_asks_project_choice_before_azure_details(repo_root) -> None:
         / "agent-insights-onboarding"
         / "SKILL.md"
     ).read_text(encoding="utf-8")
-    question = (
-        "Would you like to use an existing Foundry project or create a new\n"
-        "   one?"
-    )
-
-    assert question in skill
-    question_index = skill.index(question)
-    assert question_index < skill.index("project endpoint first")
-    assert question_index < skill.index("enabled subscriptions")
-    assert "If exactly one Application Insights connection exists, reuse it" in skill
-    assert "should scheduled\n   insight generation be enabled?" in skill
-    assert "Has an Azure administrator completed this RBAC handoff?" in skill
     normalized = " ".join(skill.split())
-    assert (
-        "Never enable scheduling based only on the user's confirmation."
-        in normalized
+    question = (
+        "Would you like to use the organizer-prepared Foundry project or create a scratch project?"
     )
-    assert "Do not recommend GPT-4-class or older models" in skill
-    assert "Prefer GPT-5.6 Terra when offered" in skill
+    assert normalized.index(question) < normalized.index("Foundry project endpoint")
+    assert normalized.index(question) < normalized.index("show enabled subscriptions")
+    assert "Reuse exactly one valid Application Insights connection" in normalized
+    assert "Do not ask about scheduling" in normalized
+    assert "should scheduled" not in normalized
+    assert "Confirmation alone is not proof." in normalized
+    assert "GPT-5+" in normalized
+    assert "--profile bug-bash" in normalized
 
 
 def test_skill_final_handoff_prioritizes_review_action(repo_root) -> None:
@@ -361,36 +355,80 @@ def test_skill_final_handoff_prioritizes_review_action(repo_root) -> None:
         / "agent-insights-onboarding"
         / "SKILL.md"
     ).read_text(encoding="utf-8")
-    template = textwrap.dedent(
-        skill.split("```markdown", 1)[1].split("```", 1)[0]
-    ).strip()
-
-    summary_index = template.index("**Setup summary**")
-    review_index = template.index("### Next action — Review your insights")
-    management_index = template.index("**Manage this setup**")
-    bug_index = template.index("Found a bug or have feedback?")
-
-    assert summary_index < review_index < management_index < bug_index
+    handoff = skill.split("## Handoff", 1)[1].split("## Recovery", 1)[0]
+    assert handoff.index("**AI preliminary assessment:") < handoff.index("**Human feedback:")
+    assert handoff.index("**Human feedback:") < handoff.index("**Resources retained:")
     assert (
         "[Open Agent Insights in Microsoft Foundry]"
         "(<agent_insights_portal_url>)"
-    ) in template
-    assert "Render it as Markdown,\n    not as a fenced code block" in skill
-    assert "Keep the bug link as the final line." in skill
-    assert "Review details:" not in template
-    assert "First run trigger:" not in template
-    assert template.splitlines()[-1] == (
-        "Found a bug or have feedback? [Create a bug](<feedback_url>)"
-    )
+    ) in handoff
+    assert "feedback link as the final line" in handoff
+    assert "not a success declaration" in handoff
+    assert "review record-ai" in skill
+    assert "review record-human" in skill
+    assert "Do not ask the participant to grade each insight." in skill
+    assert "silence is not no-comment" in skill
 
 
 def test_readme_has_one_clone_and_ask_entry_path(repo_root) -> None:
     readme = (repo_root / "README.md").read_text(encoding="utf-8")
 
     assert "git clone https://github.com/ninghu/agent-insights-quickstart" in readme
-    assert "Set up Agent Insights for me." in readme
-    assert "no\nseparate skill installation is required" in readme
+    prompt = "Run the Agent Insights quality bug bash using the agent-insights-onboarding skill."
+    assert prompt in readme
+    assert ".agents/skills/agent-insights-onboarding" in readme
+    assert "Copilot CLI" in readme
     assert "gh skill install" not in readme
-    assert readme.index("Set up Agent Insights for me.") < readme.index(
-        "## Onboarding paths"
+    assert readme.index(prompt) < readme.index("## Two fixed samples")
+    assert "cd agent-insights-quickstart\ncopilot\n" in readme
+    assert "copilot skill list" in readme
+    assert "## Before you start" in readme
+
+
+def test_readme_is_a_self_service_guide_not_a_pilot_report(repo_root) -> None:
+    readme = (repo_root / "README.md").read_text(encoding="utf-8")
+    normalized = " ".join(readme.split())
+    assert (
+        "Recording feedback is local; it is not submission to the organizer."
+    ) in normalized
+    assert "## Review and send feedback" in readme
+    assert "## If something goes wrong" in readme
+    assert "## Clean up your run" in readme
+    assert "not** a participant cleanup shortcut" in readme
+    assert "Live acceptance status" not in readme
+    assert "observed Prompt result" not in readme
+    assert "## Technical live matrix" not in readme
+    endpoints = re.findall(
+        r"https://([^/\s]+)\.services\.ai\.azure\.com/api/projects/([^`\s]+)", readme
     )
+    assert endpoints == [("<account>", "<project>")]
+
+
+def test_organizer_invitation_covers_feedback_and_participant_access(repo_root) -> None:
+    guide = (
+        repo_root / ".agents" / "skills" / "agent-insights-onboarding"
+        / "references" / "organizer-guide.md"
+    ).read_text(encoding="utf-8")
+    assert "## Send a self-service invitation" in guide
+    for field in (
+        "Repository / revision:", "Approved test project endpoint:",
+        "Preferred model deployment:", "Feedback destination:",
+        "Access / troubleshooting contact:", "Review and cleanup instructions:",
+    ):
+        assert field in guide
+    assert "ordinary participant access" in guide
+    assert "not only an organizer's" in guide
+
+
+def test_participant_documentation_local_links_resolve(repo_root) -> None:
+    skill_root = repo_root / ".agents" / "skills" / "agent-insights-onboarding"
+    documents = [
+        repo_root / "README.md", repo_root / "CONTRIBUTING.md", skill_root / "SKILL.md",
+        *(skill_root / "references").glob("*.md"),
+    ]
+    for document in documents:
+        for target in re.findall(r"\]\(([^)\s]+)\)", document.read_text(encoding="utf-8")):
+            if target.startswith(("https://", "http://", "#", "<", "mailto:")):
+                continue
+            relative = target.split("#", 1)[0]
+            assert (document.parent / relative).exists(), (document, target)

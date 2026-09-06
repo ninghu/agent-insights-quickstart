@@ -9,7 +9,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from .azure_cli import AzureCli
+from .azure_cli import AzureCli, is_resource_not_found
 from .discovery import (
     account_id_from_project,
     derive_project_endpoint,
@@ -21,6 +21,7 @@ from .discovery import (
 )
 from .errors import OnboardingError
 from .models import AzureContext, OnboardingConfig, ProjectResources
+from .receipts import ResourceObserver
 from .resource_ids import require_resource_type
 from .validation import normalize_name, require_owned_tags, validate_project_endpoint
 
@@ -148,6 +149,7 @@ def provision_scratch(
     config: OnboardingConfig,
     context: AzureContext,
     run_id: str,
+    resource_observer: ResourceObserver | None = None,
 ) -> ProjectResources:
     if not config.location or not config.agent_type:
         raise OnboardingError(
@@ -162,6 +164,8 @@ def provision_scratch(
         run_id=run_id,
         context=context,
     )
+    if resource_observer is not None:
+        resource_observer("resource_group", group)
     name_prefix = normalize_name(config.name_prefix, max_length=12)
     model_deployment_name = config.model_deployment_name or normalize_name(
         config.model_name
@@ -191,6 +195,8 @@ def provision_scratch(
             f"modelSkuName={config.model_sku}",
             f"modelSkuCapacity={config.model_capacity}",
             f"grantPrivilegedMonitoringDataReader={str(config.protected_trace_content).lower()}",
+            f"enableScheduledInsights={str(config.scheduling_enabled).lower()}",
+            f"grantProjectTelemetryAccess={str(config.project_mi_telemetry_required).lower()}",
             f"tags={json.dumps(_tags(run_id, context), separators=(',', ':'))}",
         ],
     )
@@ -372,6 +378,7 @@ def ensure_existing_connections(
     application_insights_resource_id: str,
     location: str,
     run_id: str,
+    resource_observer: ResourceObserver | None = None,
 ) -> tuple[str, ...]:
     project_connections = list_app_insights_connections(cli, project_resource_id)
     if len(project_connections) == 1:
@@ -395,6 +402,11 @@ def ensure_existing_connections(
         "Microsoft.Insights/components",
     )
     account_name, project_name = project.names
+    expected_id = (
+        f"{project.raw}/connections/{connection_plan['project_connection_name']}"
+    )
+    if resource_observer is not None:
+        resource_observer("connection_pending", {"id": expected_id})
     deployment = cli.json(
         [
             "deployment",
@@ -423,11 +435,14 @@ def ensure_existing_connections(
         for name in ("projectConnectionId",)
         if outputs.get(name)
     )
-    if len(ids) != 1:
+    if len(ids) != 1 or ids[0].rstrip("/").casefold() != expected_id.casefold():
         raise OnboardingError(
             "connection_create_failed",
             "Application Insights connection deployment returned incomplete outputs.",
         )
+    if resource_observer is not None:
+        for identifier in ids:
+            resource_observer("connection", {"id": identifier})
     return ids
 
 
@@ -471,7 +486,12 @@ def cleanup_scratch(
         f"{resource_group_id}/providers/Microsoft.Resources/deployments/ownership-check",
         "Microsoft.Resources/deployments",
     )
-    value = cli.json(["group", "show", "--name", group.resource_group])
+    try:
+        value = cli.json(["group", "show", "--name", group.resource_group])
+    except OnboardingError as error:
+        if is_resource_not_found(error):
+            return
+        raise
     if not isinstance(value, Mapping):
         raise OnboardingError(
             "invalid_resource_group",

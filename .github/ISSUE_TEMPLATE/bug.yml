@@ -1,5 +1,5 @@
 name: Bug report
-description: Report a reproducible problem in the onboarding workflow.
+description: Report an Agent Insights quality finding or a reproducible workflow problem.
 title: "[Bug]: "
 labels:
   - bug
@@ -8,11 +8,13 @@ body:
     attributes:
       value: |
         Do not include tokens, keys, connection strings, authorization headers, or customer telemetry.
+        Review sanitized evidence for environment-specific identifiers before sharing. Do not upload complete review bundles or unfiltered SDK responses.
+        Keep execution problems, AI preliminary assessment, and actual human feedback separate. Human feedback is optional; never invent it.
   - type: input
     id: version
     attributes:
       label: Version
-      description: Release tag or commit SHA.
+      description: Release tag or commit SHA; say unknown if unavailable rather than guessing.
     validations:
       required: true
   - type: dropdown
@@ -20,16 +22,48 @@ body:
     attributes:
       label: Onboarding path
       options:
-        - Existing Foundry project
-        - Scratch Prompt Agent
-        - Scratch code-based Hosted Agent
+        - Prepared existing project - new Prompt sample
+        - Prepared existing project - new Hosted sample
+        - Scratch Prompt sample - explicit fallback
+        - Scratch Hosted sample - explicit fallback
+        - Standard CLI - advanced compatibility
+        - Unknown or not reached
     validations:
       required: true
+  - type: input
+    id: baseline
+    attributes:
+      label: Case and baseline
+      description: Case name and baseline ID/version or artifact digest from local evidence, if available. Do not invent missing values.
+      placeholder: existing-create-prompt-oneoff; baseline ID/version from quality-input.json
+  - type: dropdown
+    id: category
+    attributes:
+      label: Problem category
+      options:
+        - Execution or fixture failure
+        - Insight quality weakness
+        - Insufficient or uncertain evidence
+        - Copilot CLI guidance or local review workflow
+        - Cleanup or ownership problem
+        - Other or unsure
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: CLI and model context
+      description: Copilot CLI version/model, Python/Azure CLI versions, and Foundry analysis deployment/model only if reliably known. Distinguish the Copilot model from the Foundry model. No account identifiers or secrets.
+  - type: input
+    id: error
+    attributes:
+      label: Stage and error code
+      description: Sanitized execution stage and CLI error code, if one was returned. A poor rating alone is not an execution failure.
   - type: textarea
     id: repro
     attributes:
       label: Reproduction
-      description: Sanitized steps and the CLI error code.
+      description: Sanitized steps for the observed run, including profile and sample. Do not replay traffic, apply proposed fixes, or create extra runs just to file this report.
     validations:
       required: true
   - type: textarea
@@ -44,3 +78,32 @@ body:
       label: Actual behavior
     validations:
       required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Sanitized evidence references
+      description: Locally reviewed run/receipt/report paths or sanitized run/insight references and relevant findings. Include structural counts or coverage limits where useful; do not paste raw telemetry or an entire review bundle.
+  - type: textarea
+    id: ai_assessment
+    attributes:
+      label: AI preliminary assessment
+      description: Copilot's overall assessment, supporting evidence, and uncertainty, if available. Clearly label it AI-generated; a shaped diff is not a proven correct patch.
+  - type: dropdown
+    id: human_rating
+    attributes:
+      label: Overall human rating (optional)
+      description: The participant's actual rating for the entire result, not per-insight grading. Leave unanswered when not supplied; do not copy or infer the AI assessment.
+      options:
+        - Not provided - pending
+        - 1 - Poor
+        - 2 - Mostly weak
+        - 3 - Mixed
+        - 4 - Useful
+        - 5 - Highly useful
+        - Unable to judge
+        - Deferred
+  - type: textarea
+    id: human_comment
+    attributes:
+      label: Overall human comment (optional)
+      description: Preserve the participant's own overall comment. Write no comment only if they explicitly said so; silence stays pending. Do not substitute the AI summary.
