@@ -91,7 +91,7 @@ jobs:
           exit $exitCode
       - name: Upload exact execution cleanup manifest
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.MATRIX_MANIFEST_ARTIFACT }}
           path: ${{ env.MATRIX_OUTPUT_DIR }}\cleanup-manifest.json
@@ -100,7 +100,7 @@ jobs:
           retention-days: 14
       - name: Upload sanitized matrix summary
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: agent-insights-live-matrix-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ env.MATRIX_OUTPUT_DIR }}\summary.json
@@ -166,7 +166,7 @@ jobs:
           exit $LASTEXITCODE
       - name: Upload checked cleanup manifest
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: matrix-cleanup-result-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ env.MATRIX_CLEANUP_DIR }}\cleanup-manifest.json
