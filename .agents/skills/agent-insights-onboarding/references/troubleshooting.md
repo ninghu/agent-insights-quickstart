@@ -42,9 +42,10 @@ The public API represents a manual trigger as `on_demand`; the CLI normalizes th
 - **Missing healthy/fault evidence or tool execution:** classify the fixture/execution
   problem or evidence uncertainty before blaming Insights. Correlated trace IDs alone
   do not prove the known defect was exercised.
-- **Weak/unsupported diagnosis or fix:** preserve the result, explain the supporting
-  evidence and limits in the AI preliminary assessment, and collect the overall human
-  response. A low rating is valid feedback.
+- **Weak/unsupported diagnosis or fix:** preserve the result for the participant's own
+  portal validation. Only if requested, explain the supporting evidence and limits in
+  an AI preliminary assessment or record the participant's overall feedback. A low
+  rating is valid feedback; neither action is automatic.
 - **Partial insight collection or uncertain provenance:** disclose coverage limits.
   Never assume the first page is complete or borrow unrelated historical insights.
 - **Stale review input:** reread local `review prepare`/`review status` output and use
@@ -52,6 +53,9 @@ The public API represents a manual trigger as `on_demand`; the CLI normalizes th
   evidence and obtain new human feedback if the reviewed result changed.
 - **No human answer:** leave feedback pending. Explicit unable-to-judge/deferred or
   no-comment responses are allowed; silence is not a completed review.
+- **Review pending after generation:** this is expected for the default link-only
+  handoff, not a failed Insights run. AI assessment and feedback recording are opt-in.
+  Do not start them, open the portal, or ask for a rating merely to clear the status.
 
 See [quality review](quality-review.md) for the rubric and exact local commands.
 

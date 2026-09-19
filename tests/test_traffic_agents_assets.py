@@ -347,7 +347,7 @@ def test_skill_asks_project_choice_before_azure_details(repo_root) -> None:
     assert "--profile bug-bash" in normalized
 
 
-def test_skill_final_handoff_prioritizes_review_action(repo_root) -> None:
+def test_skill_default_handoff_leaves_validation_in_portal(repo_root) -> None:
     skill = (
         repo_root
         / ".agents"
@@ -355,26 +355,56 @@ def test_skill_final_handoff_prioritizes_review_action(repo_root) -> None:
         / "agent-insights-onboarding"
         / "SKILL.md"
     ).read_text(encoding="utf-8")
-    handoff = skill.split("## Handoff", 1)[1].split("## Recovery", 1)[0]
-    assert handoff.index("**AI preliminary assessment:") < handoff.index("**Human feedback:")
-    assert handoff.index("**Human feedback:") < handoff.index("**Resources retained:")
+    handoff = skill.split("## Handoff", 1)[1].split("## Optional assessment and feedback", 1)[0]
+    normalized = " ".join(handoff.split())
+    workflow = skill.split("## Guided workflow", 1)[1].split("## Handoff", 1)[0]
+    assert (
+        "Share the Foundry result link after successful Insights generation."
+    ) in " ".join(workflow.split())
+    assert "After successful Insights generation" in normalized
+    assert "omit insight/fix counts, fix descriptions, and review sections" in normalized
     assert (
         "[Open Agent Insights in Microsoft Foundry]"
         "(<agent_insights_portal_url>)"
     ) in handoff
-    assert "feedback link as the final line" in handoff
-    assert "not a success declaration" in handoff
-    assert "review record-ai" in skill
-    assert "review record-human" in skill
-    assert "Do not ask the participant to grade each insight." in skill
-    assert "silence is not no-comment" in skill
+    assert "validate the results themselves" in normalized
+    assert "Do not automatically open the portal or use browser tools" in normalized
+    assert "Stop here by default. Do not run `review prepare`" in normalized
+    assert "`review record-ai`" in handoff
+    assert "`review record-human`" in handoff
+    assert "or prompt the participant to opt in" in normalized
+    assert "Do not include a review report or feedback link unless requested." in normalized
+    assert "preserve `review_pending`" in normalized
+    assert "never clean up merely because generation finished" in normalized
+    assert "What is your overall rating" not in handoff
+
+
+def test_skill_assessment_and_feedback_require_separate_opt_ins(repo_root) -> None:
+    skill = (
+        repo_root / ".agents" / "skills" / "agent-insights-onboarding" / "SKILL.md"
+    ).read_text(encoding="utf-8")
+    review = skill.split("## Optional assessment and feedback", 1)[1].split("## Recovery", 1)[0]
+    normalized = " ".join(review.split())
+    assert "Enter only on explicit participant request" in normalized
+    assert "An AI assessment request does not opt into feedback collection" in normalized
+    assert "a feedback recording request does not opt into AI assessment" in normalized
+    assert "Only if AI assessment was requested" in normalized
+    assert "Only if feedback recording was requested" in normalized
+    assert "leave the other pending without prompting for it" in normalized
+    assert "review record-ai" in review
+    assert "review record-human" in review
+    assert "Do not ask the participant to grade each insight." in review
+    assert "silence is not no-comment" in review
 
 
 def test_readme_has_one_clone_and_ask_entry_path(repo_root) -> None:
     readme = (repo_root / "README.md").read_text(encoding="utf-8")
 
     assert "git clone https://github.com/ninghu/agent-insights-quickstart" in readme
-    prompt = "Run the Agent Insights quality bug bash using the agent-insights-onboarding skill."
+    prompt = (
+        "Create a test agent for me to try out Agent Insights "
+        "using the agent-insights-onboarding skill."
+    )
     assert prompt in readme
     assert ".agents/skills/agent-insights-onboarding" in readme
     assert "Copilot CLI" in readme
@@ -395,7 +425,12 @@ def test_readme_keeps_quickstart_concise_and_links_details(repo_root) -> None:
     ) in normalized
     assert len(readme.split()) <= 450
     assert len(readme.splitlines()) <= 75
-    assert "one overall 1-5 rating and comment" in readme
+    assert "Once Insights generation finishes" in normalized
+    assert "validate the results yourself in the portal" in normalized
+    assert "Copilot does not automatically open the portal" in normalized
+    assert "or ask for a rating or comment" in normalized
+    assert "AI preliminary assessment and feedback recording are opt-in." in normalized
+    assert "one overall 1-5 rating and comment" not in readme
     assert "for your own sample run" in readme
     assert "Do not delete the shared project or resource group." in readme
     for reference in ("quality-review.md", "troubleshooting.md", "permissions.md",
@@ -424,6 +459,21 @@ def test_organizer_invitation_covers_feedback_and_participant_access(repo_root) 
         assert field in guide
     assert "ordinary participant access" in guide
     assert "not only an organizer's" in guide
+
+
+@pytest.mark.parametrize(
+    "reference",
+    [
+        "existing-resources.md", "scratch-environment.md", "quality-review.md",
+        "organizer-guide.md", "troubleshooting.md",
+    ],
+)
+def test_review_references_preserve_opt_in_default(repo_root, reference) -> None:
+    document = (
+        repo_root / ".agents" / "skills" / "agent-insights-onboarding"
+        / "references" / reference
+    ).read_text(encoding="utf-8")
+    assert "opt-in" in document
 
 
 def test_participant_documentation_local_links_resolve(repo_root) -> None:

@@ -48,11 +48,13 @@ traffic to compensate for delayed ingestion or poor insight quality.
 ## One-off result, review, and cleanup
 
 After ingestion, bug-bash submits one manual Insights run. Show the run directory early
-and the portal link as soon as the run is admitted. A successful service result with
+and provide the Foundry link after Insights generation. A successful service result with
 valid review provenance initially becomes `review_pending`, with explicit quality
 findings even for empty/prose-only output.
-Follow [quality review](quality-review.md) for Copilot's preliminary assessment and one
-overall human rating/comment.
+Let the participant open the portal and validate the results themselves. Do not
+automatically open the portal, assess the results, or ask for a rating/comment.
+[AI assessment and feedback recording](quality-review.md) are separate opt-in actions,
+only on explicit request. Leave review pending for the default link-only handoff.
 
 Once current AI and rated overall human records exist, the CLI synchronizes the
 receipt to `complete`. This is recording completion, not quality approval; an explicit

@@ -10,6 +10,11 @@ Guide the participant in **Copilot CLI**. Run the reviewed onboarding CLI with
 `--profile bug-bash`; do not compose Azure mutations independently. The primary path
 uses an organizer-prepared Foundry project and creates one fresh, owned sample Agent.
 
+By default, stop after Insights generation and return the Foundry link for the
+participant to validate the results themselves in the portal. Do not automatically
+open the portal, assess the results, or collect a rating/comment. AI assessment and
+feedback recording are separate opt-in actions, only on explicit participant request.
+
 ## Safety contract
 
 - Support Azure public cloud only.
@@ -37,7 +42,8 @@ uses an organizer-prepared Foundry project and creates one fresh, owned sample A
 Read [permissions](references/permissions.md) and the selected path's reference:
 [prepared existing project](references/existing-resources.md) or
 [scratch fallback](references/scratch-environment.md). Use
-[model selection](references/model-selection.md) for discovery and
+[model selection](references/model-selection.md) for discovery. For an explicitly
+requested assessment or feedback recording, read
 [quality review](references/quality-review.md) for the rubric and record contracts.
 Organizers can use the [readiness checklist](references/organizer-guide.md).
 
@@ -107,18 +113,55 @@ Organizers can use the [readiness checklist](references/organizer-guide.md).
     telemetry reads require Project MI Monitoring Reader on the connected component;
     do not confuse that required read access with enabling scheduling or granting MI
     model-inference access.
-13. On `status: insights_running`, immediately share `agent_insights_portal_url`. Explain
-    the first run may take 10–20 minutes and continue monitoring the same command.
-    Do not wait until completion to show the link or expose redacted subprocess output.
+13. On `status: insights_running`, explain that the first run may take 10-20 minutes
+    and continue monitoring the same command. A URL in progress metadata does not mean
+    the result is ready. Do not automatically open a browser or the portal.
+    Share the Foundry result link after successful Insights generation.
 14. A successful service result with valid review provenance initially produces
     `status: review_pending`. Read `result_summary` insight and applicable concrete-fix
-    counts plus `quality_review`.
+    counts plus `quality_review` for returned structural findings and evidence warnings.
     Zero insights or no concrete fix must lead to explicit quality findings, not a claim
     of quality success or a replacement run. Do not treat a shaped diff as proven correct.
+    Use the default handoff below and stop unless the participant explicitly requested
+    assessment or feedback recording. `review_pending` is expected at this point, not
+    an instruction to start a review or ask for feedback.
 
-## Preliminary assessment and human feedback
+## Handoff
 
-15. Run the local, read-only preparation command:
+After successful Insights generation, give a short result-ready message and
+[Open Agent Insights in Microsoft Foundry](<agent_insights_portal_url>).
+For a result without warnings, include only that brief message, the link, and a
+navigation hint if needed; omit insight/fix counts, fix descriptions, and review
+sections.
+Let the participant open the link and validate the results themselves; if it opens
+project home, they can select **Monitor > Agent Insights**. Do not automatically open
+the portal or use browser tools to validate results on their behalf.
+
+Stop here by default. Do not run `review prepare`, `review record-ai`, or
+`review record-human`, produce an AI assessment, ask for a rating/comment, or prompt
+the participant to opt in. Do not include a review report or feedback link unless
+requested. A generic request to create a test Agent or try Agent Insights is not
+consent to assessment or feedback collection.
+
+Surface execution failures and returned structural/evidence warnings honestly;
+successful generation is not quality approval or a verified fix. Leave AI/human
+records pending and preserve `review_pending` rather than inventing feedback or
+changing the receipt to `complete`.
+
+Keep the run directory, receipts, and returned ownership-checked cleanup command in
+local evidence and CLI output. Repeat those details only when requested or needed for
+recovery. Keep resources available for the participant's own portal validation; never
+clean up merely because generation finished. Omit unavailable cost/model values rather
+than guessing, and keep low-level run/monitor/insight IDs out of chat.
+
+## Optional assessment and feedback
+
+Enter only on explicit participant request, and perform only the requested action.
+An AI assessment request does not opt into feedback collection; a feedback recording
+request does not opt into AI assessment. If both are requested, present the AI
+assessment before collecting human feedback. Never open the portal automatically.
+
+1. For either requested action, run the local, read-only preparation command:
 
     ```text
     python "<skill-root>\scripts\agent_insights_onboard.py" review prepare --run-dir "<run-dir>"
@@ -128,23 +171,26 @@ Organizers can use the [readiness checklist](references/organizer-guide.md).
     Read [quality review](references/quality-review.md), the baseline/provenance and
     scenario evidence, and all available insight/fix material. Respect any partial
     coverage or evidence warnings. Do not substitute unrelated portal insights.
-16. Assess the known root cause, evidential support, specificity/actionability, healthy
-    behavior, false positives, and unsupported claims. Separate fixture failures from
-    quality weakness and evidence uncertainty. Record an overall AI preliminary
-    assessment and per-insight reasoning using the documented digest-bound JSON
+2. Only if AI assessment was requested, assess the known root cause, evidential support,
+    specificity/actionability, healthy behavior, false positives, and unsupported
+    claims. Separate fixture failures from quality weakness and evidence uncertainty.
+    Record an overall AI preliminary assessment and per-insight reasoning using the
+    documented digest-bound JSON
     contract and `review record-ai`. Present the overall assessment, main evidence,
     uncertainty, and report path; detailed findings may remain in the report.
-17. Share the Foundry result link again and ask **What is your overall rating for this
-    result, from 1 (poor) to 5 (highly useful)? You may also say unable to judge or defer.**
+3. Only if feedback recording was requested, share the Foundry result link and ask for
+    the next missing field: **What is your overall rating for this result, from
+    1 (poor) to 5 (highly useful)? You may also say unable to judge or defer.**
     Do not ask the participant to grade each insight.
-18. Ask for the one remaining field: **What overall comment would you like to record?
+4. In that requested feedback flow, ask for the one remaining field:
+    **What overall comment would you like to record?
     You may say no comment.** Accept combined feedback if both fields were already
     supplied; never ask again unnecessarily. Preserve the participant's wording.
     Explicit no-comment is allowed; silence is not no-comment. If no human response
     arrives, keep feedback pending rather than filling an example payload.
-19. Persist actual human input separately with `review record-human`, following the
-    exact status/rating/comment rules in the reference. Do not submit `pending` or
-    `unknown` as a human response or copy the AI verdict into human fields. Read
+5. Persist requested actual human input separately with `review record-human`,
+    following the exact status/rating/comment rules in the reference. Do not submit
+    `pending` or `unknown` as a human response or copy the AI verdict into human fields. Read
     `review status` to verify persisted state. An unable-to-judge/deferred response is
     not a numeric rating or human quality approval.
     The CLI record commands synchronize an existing final receipt: its root becomes
@@ -152,33 +198,15 @@ Organizers can use the [readiness checklist](references/organizer-guide.md).
     states remain `review_pending`. This is recording completion, not quality approval.
     Accept an explicit unable/deferred choice; do not pressure the participant for a
     numeric score merely to reach `complete`.
-
-## Handoff
-
-Use the latest receipt and review status, not a generic "setup complete" claim. Include:
-
-- **Sample/result:** Agent name/version/type, insight count and applicable concrete-fix
-  count, explicitly labeled structural counts rather than validated correct fixes.
-- **AI preliminary assessment:** overall judgment and main evidence/uncertainty.
-- **Human feedback:** actual overall rating/comment or pending/unable/deferred state.
-- **Review state:** current workflow and detailed review status. Even a `complete`
-  workflow retains `quality_approved: false`; do not claim a verified fix or authenticated
-  human origin from the status alone.
-- [Open Agent Insights in Microsoft Foundry](<agent_insights_portal_url>); if it opens
-  project home, select **Monitor > Agent Insights**.
-- **Local evidence:** receipt, review input/report, and AI/human record paths as returned.
-- **Feedback delivery:** explain that recording is local, not submission. Use the
-  organizer's designated channel for a sanitized overall rating/comment, including
-  no-bug feedback. Do not invent a channel, claim delivery, or submit anything without
-  an explicit request.
-- **Resources retained:** cost estimate only if returned; the exact scoped cleanup
-  command for after review. Never perform cleanup merely because generation finished.
-- The existing returned feedback link as the final line. Do not file or upload anything
-  automatically; use the sanitized [feedback guidance](references/quality-review.md#feedback-material).
-
-Keep low-level run/monitor/insight IDs in local evidence rather than duplicating them
-in chat. Omit unavailable cost/model values instead of guessing. If human feedback is
-pending, the next action is that human review, not a success declaration.
+6. Report only the requested assessment or recorded feedback, its evidence/uncertainty,
+    and returned local report/record paths. Label AI judgment as preliminary and keep
+    actual human input separate. Even a `complete` workflow retains
+    `quality_approved: false`; do not claim a verified fix or authenticated human origin.
+    If only one action was requested, leave the other pending without prompting for it.
+    For requested feedback, explain that recording is local, not submission, and use
+    the returned feedback link or organizer's designated channel. Do not invent a
+    channel, claim delivery, file a bug, or upload anything automatically; follow the
+    sanitized [feedback guidance](references/quality-review.md#feedback-material).
 
 ## Recovery
 
@@ -202,7 +230,10 @@ Do not create Azure resources or traffic merely to inspect this skill. Use exist
 offline tests and `gh skill publish .agents\skills --dry-run` from the repository root.
 Packaging is not conversational acceptance. Live acceptance requires an explicitly
 approved disposable prepared project and fresh actual Copilot CLI conversations for
-both samples, with real human feedback or an honestly reported pending step.
+both samples. Verify the default stops at the post-generation Foundry link without
+opening the portal or starting review. Test the optional assessment and feedback
+paths only after explicit requests, using real human feedback or an honestly reported
+pending step.
 
 The separate technical matrix runs the primary Prompt and Hosted one-off cases in
 its own disposable prepared fixture and cleans it up; scratch cases are explicit

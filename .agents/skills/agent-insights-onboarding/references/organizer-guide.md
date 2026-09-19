@@ -34,6 +34,8 @@ Access / troubleshooting contact: <organizer or administrator>
 Review and cleanup instructions: <retention window and owner of shared infrastructure>
 
 Start with the repository README in an interactive Copilot CLI session.
+After Insights generation, open the Foundry link to validate the results yourself.
+AI assessment and feedback recording are separate opt-in actions, only on request.
 Recording a score locally does not submit feedback; use the destination above.
 Do not delete the shared project, model, monitoring resources, or resource group.
 ```
@@ -41,9 +43,10 @@ Do not delete the shared project, model, monitoring resources, or resource group
 - [ ] Confirm everyone can access the repository and the selected feedback destination.
   The service bug form requires access to its internal project; provide an approved
   alternative contact when that access is unavailable.
-- [ ] Explain what to send when no bug is found: the participant's overall rating and
-  comment, with a sanitized sample/revision reference. Do not use the bug tracker as an
-  invented automatic collection mechanism.
+- [ ] If participants choose to send feedback, explain what to send when no bug is
+  found: their overall rating and comment, with a sanitized sample/revision reference.
+  Do not make feedback collection a default step or use the bug tracker as an invented
+  automatic collection mechanism.
 - [ ] Check the README flow with ordinary participant access, not only an organizer's
   Owner/admin account. Resolve model-discovery, project, telemetry, and permission
   handoff prerequisites before the event.
@@ -110,9 +113,12 @@ parent run; it does not recreate the project/model or generate traffic.
   **six healthy plus five faulty requests** per selected sample; no new/random defects.
 - [ ] Confirm the configuration uses `--profile bug-bash`; existing mode uses
   `--create-sample-agent` and no `--agent-name`. There is no scheduling question.
-- [ ] Surface the run directory, frozen plan, and stage progress early. Show the portal
-  link immediately when the manual Insights run is admitted; allow roughly 10–20
-  minutes for that first run plus provisioning and ingestion.
+- [ ] Surface the run directory, frozen plan, and stage progress early. Allow roughly
+  10-20 minutes for the first Insights run plus provisioning and ingestion. Provide the
+  Foundry link after Insights generation, without automatically opening the portal.
+- [ ] Stop at that link by default and let participants validate results themselves.
+  AI assessment and rating/comment collection require separate explicit requests;
+  do not prompt participants to opt in or treat pending review as an execution failure.
 - [ ] Keep execution status, structural findings, Copilot's AI preliminary assessment,
   and the participant's one overall rating/comment separate.
 - [ ] Accept poor/mixed results, unable-to-judge, deferred, and no-comment responses.
@@ -140,6 +146,7 @@ parent run; it does not recreate the project/model or generate traffic.
   that the organizer received feedback.
 
 For release acceptance, run separate fresh Copilot CLI Prompt and Hosted conversations
-and record the actual human step or its pending/blocking state. A technical matrix
-result is not human quality approval. Reconcile documentation with observed behavior
-after acceptance.
+and verify the default post-generation link-only handoff. Exercise assessment and
+feedback separately on explicit request, recording actual human input or its
+pending/blocking state. A technical matrix result is not human quality approval.
+Reconcile documentation with observed behavior after acceptance.
