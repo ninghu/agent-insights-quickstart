@@ -1,9 +1,16 @@
 # Quality review
 
-Review the **one manual run from this newly owned sample**, not an existing customer
-Agent or an unrelated historical result. Copilot CLI supplies a preliminary overall
-assessment with per-insight reasoning. The participant supplies **one overall rating
-and comment**, never a score for every insight.
+This is an **opt-in** workflow. By default, Copilot returns the Foundry link after
+Insights generation so the participant can validate the results themselves in the
+portal. Do not open the portal, run review commands, assess results, or ask for a
+rating/comment automatically.
+
+Only on explicit request, review the **one manual run from this newly owned sample**,
+not an existing customer Agent or an unrelated historical result. AI assessment and
+feedback recording are separate choices: requesting one does not authorize the other.
+For requested AI assessment, Copilot CLI supplies a preliminary overall assessment
+with per-insight reasoning. For requested feedback recording, the participant supplies
+**one overall rating and comment**, never a score for every insight.
 
 Execution, structural observations, AI assessment, and human feedback are separate.
 Do not apply proposed changes, run suggested commands, or regenerate traffic to improve
@@ -116,9 +123,12 @@ After a successful service run and valid review provenance, onboard prepares the
 sanitized, allowlisted evidence. Its initial handoff receipt has `status: review_pending`,
 retains `result_summary` insight and concrete-fix counts, and includes `quality_review`
 state/paths. Technical or provenance failures do not become successful reviews.
+This evidence preparation is not an AI assessment or feedback collection. Leave the
+review pending for the default link-only handoff; no extra review command is needed.
 
-Use the skill virtual environment's Python. The following PowerShell reference assumes
-that environment is active:
+Only for a requested assessment or feedback recording, use the skill virtual
+environment's Python. The following PowerShell reference assumes that environment is
+active:
 
 ```powershell
 $cli = ".agents\skills\agent-insights-onboarding\scripts\agent_insights_onboard.py"
@@ -129,8 +139,9 @@ python $cli review record-human --run-dir $runDir --input "$runDir\participant-f
 python $cli review status --run-dir $runDir
 ```
 
-Run each recording command only after its actual input has been supplied; this block
-is a command reference, not an instruction to create placeholder human feedback.
+Run only the requested action's commands, and each recording command only after its
+actual input has been supplied. This block is a command reference, not an instruction
+to perform both actions or create placeholder human feedback.
 
 `review prepare` reads persisted evidence and rechecks its digest/provenance; it does
 not start a run or fetch new Azure data. Its returned JSON is the review input itself.
@@ -205,7 +216,7 @@ per-insight finding to give overall feedback.
 
 ## Actual overall human feedback
 
-Ask only for the next missing field:
+Only when feedback recording was explicitly requested, ask for the next missing field:
 
 1. **What is your overall rating for this result from 1 to 5? You may say unable to
    judge or defer.**
@@ -331,9 +342,10 @@ metadata such as `has_more` means unknown, not exhaustive coverage.
 `quality_approved` remains **false**: recording a response is not programmatic quality
 approval, a proven fix, or authenticated human acceptance.
 
-A real participant response can be saved before AI review, but overall status stays
+A real participant response can be saved without AI review, but overall status stays
 `ai_review_pending` until AI reasoning exists. Do not infer AI completion from a human
-record; the intended skill sequence presents the AI assessment first.
+record or start AI assessment to clear that status. If both actions were explicitly
+requested, present the AI assessment first; otherwise perform only the requested action.
 
 Do not modify the frozen evidence or replace its digest to accept stale feedback.
 Preserve the original artifacts, resolve the mismatch, and reassess/recollect feedback
@@ -362,7 +374,8 @@ A useful, locally reviewed report includes:
   run. No rerun or fix application is required to report a finding.
 - Sanitized run/insight references or local receipt/report paths, structural counts,
   and relevant evidence/coverage limitations.
-- The **AI preliminary** overall assessment and its evidence, distinctly labeled.
+- The **AI preliminary** overall assessment and its evidence, distinctly labeled,
+  only if requested and recorded.
 - The optional **actual human** overall rating/comment, or pending/unable/deferred
   state. Never synthesize either field.
 

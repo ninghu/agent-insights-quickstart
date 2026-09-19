@@ -78,17 +78,23 @@ metadata. Do not reuse a previous run ID for a different participant/sample.
 - Resume only the same recorded run. Never replay traffic or submit a second run to
   improve quality.
 
-## Review and cleanup
+## Portal handoff, optional review, and cleanup
 
 A successful service run with valid review provenance initially produces a
 `review_pending` receipt with structural counts and review paths. Empty insights or
-missing concrete fixes remain explicit quality findings for
-[AI and overall human review](quality-review.md); they are not evidence of quality
-success. Technical failures still fail.
+missing concrete fixes remain explicit quality findings; they are not evidence of
+quality success. Technical failures still fail.
+
+By default, return the Foundry link after Insights generation and let the participant
+open the portal and validate the results themselves. Do not automatically open the
+portal, assess the results, or ask for a rating/comment. [AI assessment and feedback
+recording](quality-review.md) are separate opt-in actions, only on explicit request.
+Leaving `review_pending` is expected for this default handoff.
 
 The CLI later synchronizes the existing receipt to `complete` only when current AI
 and rated overall human records are present. This does not approve insight quality or
-prove a fix; unable/deferred feedback remains a valid explicit response.
+prove a fix; unable/deferred feedback remains a valid explicit response. Do not start
+an unrequested review just to make the receipt `complete`.
 
 Keep the printed portal link, run directory, and local evidence. Do not clean up merely
 because the service completed. After review or an explicit decision to end the run,

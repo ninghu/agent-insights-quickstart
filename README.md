@@ -1,7 +1,7 @@
 # Agent Insights Quickstart
 
 Try **Microsoft Foundry Agent Insights** with **Copilot CLI**. Run a sample Agent,
-review the generated insights, and tell us how useful they are.
+then validate the generated insights yourself in the Foundry portal.
 
 ## Quick start
 
@@ -16,7 +16,7 @@ copilot
 **2. Launch the skill by pasting this prompt into Copilot CLI:**
 
 ```text
-Run the Agent Insights quality bug bash using the agent-insights-onboarding skill.
+Create a test agent for me to try out Agent Insights using the agent-insights-onboarding skill.
 ```
 
 The skill is bundled in `.agents/skills/agent-insights-onboarding`. No separate
@@ -37,13 +37,14 @@ Copilot checks access, creates your chosen sample, sends **6 healthy + 5 faulty
 requests**, and runs Insights **once, without scheduling**. The first Insights run may
 take **10-20 minutes**, plus deployment and ingestion.
 
-Copilot provides a Foundry link and an **AI preliminary assessment**. Open the result,
-review whether the insights find the real problem and suggest a useful fix, then give
-**one overall 1-5 rating and comment**. You can defer or say unable to judge.
-No suggested fix is applied automatically.
+Once Insights generation finishes, Copilot provides a **Foundry link** for you to open
+and validate the results yourself in the portal. Copilot does not automatically open
+the portal, assess the results, or ask for a rating or comment.
 
-**Feedback is saved locally, not automatically submitted.** Share a sanitized summary
-through your organizer's feedback channel. See the [review and feedback guide](.agents/skills/agent-insights-onboarding/references/quality-review.md).
+**AI preliminary assessment and feedback recording are opt-in.** Ask Copilot if you
+want either. **Feedback is saved locally, not automatically submitted.** See the
+[review and feedback guide](.agents/skills/agent-insights-onboarding/references/quality-review.md).
+No suggested fix is applied automatically.
 
 After review, use the cleanup command Copilot prints **for your own sample run**.
 Do not delete the shared project or resource group. Azure charges may continue while

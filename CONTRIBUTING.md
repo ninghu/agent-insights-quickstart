@@ -6,6 +6,9 @@ Contributions are welcome through GitHub issues and pull requests.
 
 - The participant front-end is **Copilot CLI**. Use an organizer-prepared project and a
   fresh owned sample with `--profile bug-bash`. Scratch is an explicit fallback.
+- After Insights generation, the default handoff is the Foundry link for participants
+  to validate results themselves. Do not open the portal automatically. AI assessment
+  and feedback recording are separate opt-in actions, only on explicit request.
 - Keep the two fixed defects and the six healthy/five faulty fixtures. Do not introduce
   random scenarios, evaluate customer Agents, or repair the planted defect before
   generating review evidence.
@@ -271,11 +274,15 @@ can use the interactive CLI approval flow.
    conversations are not substitutes.
 2. Observe discovery, doctor, the frozen plan, early run directory/stage progress,
    owned sample creation, bounded traffic, ingestion, and exactly one manual run.
-3. Check that the portal link appears on run admission. Read the persisted sanitized
-   evidence, Copilot's preliminary assessment, and any quality/evidence findings.
-4. A real human supplies one overall rating and comment, or an explicit
-   unable-to-judge/deferred/no-comment response. If they do not respond, preserve
-   pending feedback and report the acceptance gap.
+3. Check that the default handoff provides the Foundry link after Insights generation
+   without opening the portal, running review commands, producing an AI assessment,
+   or asking for feedback. Preserve returned structural/evidence warnings and pending
+   review state; do not report quality approval.
+4. Exercise AI assessment and feedback recording as separate opt-in requests. Requesting
+   one must not start the other. When feedback recording is requested, a real human
+   supplies one overall rating and comment, or an explicit
+   unable-to-judge/deferred/no-comment response. Preserve missing input as pending,
+   never fabricate it or require opt-in to finish the default handoff.
 5. Preserve assets while the participant reviews. Perform the printed scoped cleanup
    only after review or explicit authorization to end that run, and verify shared
    project infrastructure remains.
