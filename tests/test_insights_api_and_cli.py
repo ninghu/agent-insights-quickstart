@@ -107,6 +107,72 @@ def test_agent_insights_client_can_request_detailed_fixes(monkeypatch) -> None:
         assert client.list_insights("monitor", include_details=True) == []
 
 
+@pytest.mark.parametrize("method", ["GET", "POST", "PATCH", "DELETE"])
+def test_agent_insights_requests_include_preview_opt_in(monkeypatch, method) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.method == method
+        assert request.headers["Foundry-Features"] == "AgentInsights=V1Preview"
+        assert request.url.params["api-version"] == "2025-05-15-preview"
+        return httpx.Response(200, json={})
+
+    _patch_client(monkeypatch, handler)
+    with AgentInsightsClient(
+        project_endpoint="https://demo.services.ai.azure.com/api/projects/demo",
+        credential=FakeCredential(),
+    ) as client:
+        assert client._request(method, "/agent_insight_monitors") == (200, {})
+
+
+def test_agent_insights_probe_does_not_treat_preview_opt_in_as_rbac(monkeypatch) -> None:
+    def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            403,
+            json={
+                "error": {
+                    "code": "preview_feature_required",
+                    "message": "untrusted-service-message",
+                },
+            },
+            headers={"x-ms-request-id": "req-preview"},
+        )
+
+    _patch_client(monkeypatch, handler)
+    with AgentInsightsClient(
+        project_endpoint="https://demo.services.ai.azure.com/api/projects/demo",
+        credential=FakeCredential(),
+    ) as client, pytest.raises(OnboardingError) as excinfo:
+        client.probe()
+
+    assert excinfo.value.code == "preview_feature_required"
+    assert excinfo.value.details == {
+        "method": "GET",
+        "path": "/agent_insight_monitors",
+        "status": 403,
+        "request_id": "req-preview",
+    }
+    assert "untrusted-service-message" not in repr(excinfo.value.as_dict())
+    assert "real-secret-token" not in repr(excinfo.value.as_dict())
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        httpx.Response(403, text="Forbidden"),
+        httpx.Response(403, json={"error": {"code": "PermissionDenied"}}),
+        httpx.Response(403, json=["unexpected", "error", "shape"]),
+    ],
+)
+def test_agent_insights_probe_preserves_other_forbidden_responses(
+    monkeypatch, response,
+) -> None:
+    _patch_client(monkeypatch, lambda _request: response)
+    with AgentInsightsClient(
+        project_endpoint="https://demo.services.ai.azure.com/api/projects/demo",
+        credential=FakeCredential(),
+    ) as client:
+        assert client.probe() == {"reachable": True, "authorized": False}
+
+
 def test_agent_insights_probe_status_mapping_and_errors(monkeypatch) -> None:
     def forbidden(_request: httpx.Request) -> httpx.Response:
         return httpx.Response(403, json={"error": "denied"}, headers={"request-id": "req-403"})
