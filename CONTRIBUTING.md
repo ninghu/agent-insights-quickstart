@@ -247,7 +247,7 @@ scheduling or granting MI model inference. The client also had to normalize the 
 `on_demand` trigger to its `manual` contract. Failed evidence was preserved, and the
 corrected samples were separate attempts rather than traffic replay under an old run.
 
-**Current acceptance state:** real Copilot CLI Prompt/Hosted runs have completed
+**Recorded pilot acceptance state:** real Copilot CLI Prompt/Hosted runs have completed
 through Azure execution and persisted AI review. Initial dependency-permission failures
 were preserved, and corrected fresh sample attempts each generated exactly eleven
 requests and one successful on-demand run. Actual overall human feedback and
@@ -256,6 +256,36 @@ Do not equate the recorded `mixed`/`poor` AI assessments with human approval.
 This pilot does not establish readiness for every participant identity. Before
 sharing an invitation, also check the prepared project's effective access using the
 intended participant permissions rather than assuming an administrator's access applies.
+
+### Recorded default-handoff E2E (2026-09-19)
+
+Two separate Copilot CLI 1.0.87-0 conversations exercised the approved prepared-project
+path with the local preview-header compatibility fix. The API required
+`Foundry-Features: AgentInsights=V1Preview`; missing opt-in must fail explicitly rather
+than being treated as repairable RBAC. Existing infrastructure and a discovered model
+deployment were reused.
+
+| Sample | Requests generated and correlated | Manual Insights runs | Returned insights | Structural fix candidates |
+| --- | --- | --- | --- | --- |
+| Prompt | 6 healthy + 5 faulty | 1 | 1 | 1 prompt change |
+| Hosted | 6 healthy + 5 faulty | 1 | 1 | 1 code change |
+
+Both results had sufficient evidence and complete collection, left scheduling disabled,
+retained resources, and remained `review_pending`. No AI/human review records were
+created. The result handoffs contained the readiness message, Foundry link, and
+navigation guidance without opening the portal or requesting feedback. These are
+technical and default-handoff observations, not validation of insight/fix correctness
+or authenticated Portal UI acceptance.
+
+The initial headless attempts stopped at CLI path approval before mutation. Interactive
+authorization resumed the same conversations and run IDs; traffic was not replayed.
+The restricted test harness omitted `task_complete`, and user-enabled autopilot
+emitted additional completion-tool-unavailable messages after each result handoff.
+Preserve runtime completion tools when restricting the test toolset, and inspect the
+full conversation rather than treating the first result link as proof of a clean CLI
+finish. The original transcripts retain this harness limitation.
+A separate offline follow-up with `task_complete` available completed successfully;
+the live Azure workloads were not rerun to replace those transcripts.
 
 ### Repeatable acceptance procedure
 

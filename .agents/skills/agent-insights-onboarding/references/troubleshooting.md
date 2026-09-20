@@ -7,6 +7,7 @@ completed service job or structural fix count is not semantic quality approval.
 | --- | --- | --- |
 | `unsupported_cloud` | Azure CLI is not using `AzureCloud`. | Select the approved Azure public-cloud context. Sovereign clouds are not supported. |
 | `feature_unavailable` | The selected subscription/project is not Agent Insights-enabled. | Ask the organizer for an explicitly enabled target. Do not silently switch subscriptions or provision scratch. |
+| `preview_feature_required` | The API rejected the request's preview feature opt-in, not an ordinary RBAC denial. | The Agent Insights client sends `Foundry-Features: AgentInsights=V1Preview` on every request. Verify the client and current preview requirements, then rerun doctor. Do not grant extra roles or proceed on `ready` from an older client that treats this response as repairable authorization. |
 | `insufficient_preflight_permission` | A required resource or role action is missing. | Show the exact `admin_handoff`; after an administrator completes it, rerun doctor and require `ready`. Do not grant Owner. |
 | `ambiguous_app_insights_connection` | More than one project connection can satisfy the request. | Hand the ambiguity to the organizer. Never guess or delete a connection. |
 | `model_unavailable` | The model/version/SKU is unavailable or quota is insufficient. | Use deployment/model discovery and rerun doctor. Do not replace another deployment. |

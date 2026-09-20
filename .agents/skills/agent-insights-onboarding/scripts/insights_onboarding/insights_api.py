@@ -11,6 +11,7 @@ import httpx
 from .errors import OnboardingError
 
 _API_VERSION = "2025-05-15-preview"
+_PREVIEW_FEATURES = "AgentInsights=V1Preview"
 _TERMINAL = {"succeeded", "failed", "cancelled", "canceled"}
 
 
@@ -75,6 +76,7 @@ class AgentInsightsClient:
                 "Authorization": f"Bearer {token}",
                 "Accept": "application/json",
                 "Content-Type": "application/json",
+                "Foundry-Features": _PREVIEW_FEATURES,
             },
         )
         allowed = expected or {200}
@@ -82,15 +84,32 @@ class AgentInsightsClient:
             request_id = response.headers.get("x-ms-request-id") or response.headers.get(
                 "request-id"
             )
+            details = {
+                "method": method,
+                "path": path,
+                "status": response.status_code,
+                "request_id": request_id,
+            }
+            try:
+                error_payload = response.json()
+            except ValueError:
+                error_payload = None
+            error = (
+                error_payload.get("error")
+                if isinstance(error_payload, Mapping)
+                else None
+            )
+            if isinstance(error, Mapping) and error.get("code") == "preview_feature_required":
+                raise OnboardingError(
+                    "preview_feature_required",
+                    "Agent Insights rejected the request's preview feature opt-in. "
+                    "Verify the Foundry-Features header and current API preview requirements.",
+                    details,
+                )
             raise OnboardingError(
                 "agent_insights_request_failed",
                 "Agent Insights API request failed.",
-                {
-                    "method": method,
-                    "path": path,
-                    "status": response.status_code,
-                    "request_id": request_id,
-                },
+                details,
             )
         if response.status_code == 204 or not response.content:
             return response.status_code, None
@@ -112,6 +131,8 @@ class AgentInsightsClient:
             )
             return {"reachable": True, "authorized": status == 200, "payload": payload}
         except OnboardingError as error:
+            if error.code == "preview_feature_required":
+                raise
             raw_status = error.details.get("status")
             status = raw_status if isinstance(raw_status, int) else 0
             if status == 404:
