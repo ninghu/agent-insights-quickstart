@@ -48,7 +48,7 @@ jobs:
         run: |
           "execution_id=$env:MATRIX_EXECUTION_ID" | Out-File $env:GITHUB_OUTPUT -Append
           "manifest_artifact=$env:MATRIX_MANIFEST_ARTIFACT" | Out-File $env:GITHUB_OUTPUT -Append
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
@@ -126,7 +126,7 @@ jobs:
       MATRIX_MANIFEST_ARTIFACT: ${{ needs.live-matrix.outputs.manifest_artifact }}
       MATRIX_CLEANUP_DIR: .agent-insights\matrix-cleanup\${{ needs.live-matrix.outputs.execution_id }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Require the creating job's identity even when retrying only cleanup
         shell: pwsh
         run: |
