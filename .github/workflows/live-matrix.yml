@@ -134,7 +134,7 @@ jobs:
             throw "The creating job did not record its identity; cleanup cannot select another execution."
           }
       - name: Download only this execution's cleanup manifest
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v8
         with:
           name: ${{ env.MATRIX_MANIFEST_ARTIFACT }}
           path: ${{ env.MATRIX_CLEANUP_DIR }}
